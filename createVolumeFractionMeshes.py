@@ -15,7 +15,7 @@ from meshmanipulate import *
 
 import numpy as np
 def Make3DMesh(volFrac=0.27,rSphere=12.5,dBox=65.,name="test"):
-  sm = SurfaceMesh("cube_high.off")
+  sm = SurfaceMesh("./meshes/cube_high.off")
   center(sm)
 
   rBox = dBox/2.
@@ -78,7 +78,7 @@ def doit(fileIn):
     dBox = vBox**(1/3.)
     #name = "volFrac_%4.2f.geo" % volFrac
     # test with 2D MakeGmsh(volFrac=volFrac,rSphere=rSphere,dBox=dBox)
-    name = "volFrac_%4.2f.xml" % volFrac
+    name = "./meshes/volFrac_%4.2f.xml" % volFrac
     Make3DMesh(volFrac=volFrac,rSphere=rSphere,dBox=dBox,name=name)
     
 

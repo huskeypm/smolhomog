@@ -6,17 +6,18 @@ export PYTHONPATH=$PYTHONPATH:/home/huskeypm/bin/dolfin/
 """
 from dolfin import *
 import numpy as np
+import sys
+sys.path.append("/home/huskeypm/sources/smolfin/")
+import poissonboltzmann as pb
 
 boundsMin = np.zeros(3)
 boundsMax = np.zeros(3)
-case="none"
 meshFile="none"
 dim=-1
-gamer = 0
 electro=1.
-print "w HUGE charge"
-q = 100.
+
 beta = 1/0.59
+q=1.
 
 EPS = 0.001 
 def DefineBoundary(x,btype,on_boundary):
@@ -69,7 +70,7 @@ class ObsBoundary(SubDomain):
 ##
 ##
 
-def doit(meshFile="none", case="none",tag="",gamer=0):
+def doit(meshFile="none",tag="",meshType="gamer"): 
 
 
   ## Mesh
@@ -90,9 +91,8 @@ def doit(meshFile="none", case="none",tag="",gamer=0):
 
   ## first do electro
   if electro:
-   import poissonboltzman as pb
    print "Doing pb"
-   (Vdumm,psi) = pb.SolvePoissonBoltzmann(mesh)
+   (Vdumm,psi) = pb.SolvePoissonBoltzmann(mesh,meshType=meshType)
    name = "elect.pvd" 
    File(name) << psi      
 
@@ -144,8 +144,7 @@ def doit(meshFile="none", case="none",tag="",gamer=0):
   
   u = TrialFunction(V)
   v = TestFunction(V)
-  gamer=0
-  if(gamer==1):
+  if(meshType=="gamer"):
     form = inner(Aij*(grad(u) + Delta), grad(v))*dx(1)
   else:
     form = inner(Aij*(grad(u) + Delta), grad(v))*dx
@@ -187,14 +186,14 @@ def doit(meshFile="none", case="none",tag="",gamer=0):
     outname = "diff%d.pvd" % i
     File(outname)<<project(grad_Xi_component,V=Vscalar)
   
-    if(gamer==1):
+    if(meshType=="gamer"): 
       form = grad_Xi_component * dx(1)
     else:
       form = grad_Xi_component * dx
     integrand = assemble(form)
     omegas[i] = integrand
   
-  if(gamer==1):
+  if(meshType=="gamer"): 
     vol = assemble( Constant(1)*dx(1),mesh=mesh ) 
     surf = assemble( Constant(1)*ds,mesh=mesh ) 
   else:
@@ -208,6 +207,7 @@ def doit(meshFile="none", case="none",tag="",gamer=0):
   print Ds[0]
 
   print "Vol: %f SA: %f\n" % (vol, surf)
+  return Ds[0]
   
   # for debug
   # Only relevant for cubes
