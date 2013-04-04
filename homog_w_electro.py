@@ -16,8 +16,10 @@ meshFile="none"
 dim=-1
 electro=1.
 
-beta = 1/0.59
-q=1.
+class params:
+  beta = 1/0.59
+  q=1.
+  z = -3
 
 EPS = 0.001 
 def DefineBoundary(x,btype,on_boundary):
@@ -92,6 +94,8 @@ def doit(meshFile="none",tag="",meshType="gamer"):
   ## first do electro
   if electro:
    print "Doing pb"
+   pb.params.z = params.z
+   pb.params.q = params.q
    (Vdumm,psi) = pb.SolvePoissonBoltzmann(mesh,meshType=meshType)
    name = "elect.pvd" 
    File(name) << psi      
@@ -166,7 +170,8 @@ def doit(meshFile="none",tag="",meshType="gamer"):
   #plot(u,interactive=True)
   print "WARNING: not sure that this is correct yet for adding electro contribution"
   expnpmf = Function(Vscalar)
-  expnpmf.vector()[:] = np.exp(-1*beta*q*psi.vector()[:])
+  expnpmf.vector()[:] = np.exp(-1*params.beta*params.q*psi.vector()[:])
+  File("distro.pvd") << project(expnpmf)
 
   #xproj = project(x[0]*expnpmf,V=Vscalar)
   xproj = project(x*expnpmf)
@@ -225,8 +230,16 @@ Usage:
 
   assumes sphere2d.xml
 Notes:
+
 """
   tag = "_welectro"
+
+  error="""
+Results don't agree w homog.py, so don't use
+ 
+"""
+
+  raise RuntimeError(error) 
 
   import sys
   if len(sys.argv) < 2:
