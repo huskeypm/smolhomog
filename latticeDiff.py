@@ -98,7 +98,7 @@ def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pm
   # then 
   # Int[ e^-*(u'*v - u0'*v - -dt(grad(u')*grad(v))] 
   dt=15.0   
-  T=100 
+  T=500  
   expnpmf=Function(V)
   expnpmf.vector()[:] = np.exp(-pmf/0.6)
   RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
@@ -147,24 +147,42 @@ def valid2():
   mode = "bc"
   mesh = Mesh("m15.xml") 
   V = FunctionSpace(mesh,"CG",1)
-  pmf = Function(V) 
-  exprN = Expression("             0") # neutral      
-  exprA = Expression("-0.1*(x[0]+10)") # attractive 
-  exprR = Expression(" 0.1*(x[0]+10)") # repulsive     
+  #exprA = Expression("-0.1*(x[0]+10)") # attractive 
+  #exprR = Expression(" 0.1*(x[0]+10)") # repulsive     
 
+  ## make pmf maps 
+  pmf = Function(V) 
+  mask = np.copy(pmf.vector())
+
+  # this scoots around a Debye-Huckel-like potential over all obstactles
+  for i in np.arange(8):
+    for j in np.arange(8):
+      x0 = -7.+2*i
+      x1 = -7.+2*j
+      exprA = Expression("-2*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.3)",x0=x0,x1=x1)   
+      pmf.interpolate(exprA)
+      mask += pmf.vector()[:]
+
+  pmf.vector()[:] = mask
+
+
+  ## create pmfs going into attractive, neutral, repulseive cases
+  pmfn = Function(V)
+  pmfn.vector()[:] = 0.
+  pmfa = Function(V)
+  pmfa.vector()[:] = pmf.vector()[:] 
+  pmfr = Function(V)
+  pmfr.vector()[:] = -1*pmf.vector()[:] 
+  
   plt.figure()
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
+  plt.plot(ts,concs,"k--",label="neutral") 
   # 
-  pmf.interpolate(exprN)
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15n.pvd",mode=mode,pmf=pmf.vector())
-  plt.plot(ts,concs,"k-",label="neutral") 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15a.pvd",mode=mode,pmf=pmfa.vector())
+  plt.plot(ts,concs,"b.",label="attractive") 
   # 
-  pmf.interpolate(exprA)
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15a.pvd",mode=mode,pmf=pmf.vector())
-  plt.plot(ts,concs,"b-",label="attractive") 
-  # 
-  pmf.interpolate(exprR)
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15r.pvd",mode=mode,pmf=pmf.vector())
-  plt.plot(ts,concs,"r-",label="repulsive") 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15r.pvd",mode=mode,pmf=pmfr.vector())
+  plt.plot(ts,concs,"r.",label="repulsive") 
 
   ##
   plt.legend(loc=4)
