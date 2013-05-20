@@ -3,6 +3,7 @@
 # 
 from dolfin import *
 import numpy as np
+import matplotlib.pylab as plt
 
 
 class LeftBoundary(SubDomain):
@@ -37,7 +38,7 @@ class MyEquation(NonlinearProblem):
         self.reset_sparsity = False
 
 
-def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource"):
+def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pmf=1.):
   D = Constant(Diff) 
   # Create mesh and define function space
   mesh = Mesh(fileName)     
@@ -90,11 +91,18 @@ def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource"):
   ds = Measure("ds")[subdomains]
 
   
-  # weak form 
+  ## weak form 
+  # weak form of smol is
+  # Int[ u*v - u0*v - -dt(e^-*grad(e^+ u)*grad(v))] 
+  # let u' = e^+ * u
+  # then 
+  # Int[ e^-*(u'*v - u0'*v - -dt(grad(u')*grad(v))] 
   dt=15.0   
-  T=200 
-  RHS = -inner(D*grad(u), grad(q))*dx
-  L = u*q*dx - u0*q*dx - dt * RHS
+  T=100 
+  expnpmf=Function(V)
+  expnpmf.vector()[:] = np.exp(-pmf/0.6)
+  RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
+  L = (expnpmf*u*q*dx - expnpmf*u0*q*dx - dt*RHS)
   
   # Compute directional derivative about u in the direction of du (Jacobian)
   a = derivative(L, u, du)
@@ -109,18 +117,24 @@ def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource"):
   concs=[]
   ts = []
   while (t < T):
-      # report on prev iter
-      uds = assemble(u*ds(rMarker),mesh=mesh)
-      area = assemble(Constant(1.)*ds(rMarker),mesh=mesh)
-      conc = uds/area
-      ts.append(t)
-  
       # advance 
+      t0=t
       t += dt
       u0.vector()[:] = u.vector()
       solver.solve(problem, u.vector())
-      file << (u,t) 
-  
+
+      # remap to u from u' = e^+ * u (see above) 
+      up = Function(V)
+      u0p = Function(V)
+      u0p.vector()[:] = expnpmf.vector()[:] * u0.vector()[:]
+      up.vector()[:] = expnpmf.vector()[:] * u.vector()[:]
+      file << (up,t) 
+
+      # report on prev iter
+      uds = assemble(u0p*ds(rMarker),mesh=mesh)
+      area = assemble(Constant(1.)*ds(rMarker),mesh=mesh)
+      conc = uds/area
+      ts.append(t0)
       concs.append(conc)
 
 
@@ -128,10 +142,44 @@ def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource"):
   concs = np.asarray(concs)
 
   return (ts,concs)
+
+def valid2():
+  mode = "bc"
+  mesh = Mesh("m15.xml") 
+  V = FunctionSpace(mesh,"CG",1)
+  pmf = Function(V) 
+  exprN = Expression("             0") # neutral      
+  exprA = Expression("-0.1*(x[0]+10)") # attractive 
+  exprR = Expression(" 0.1*(x[0]+10)") # repulsive     
+
+  plt.figure()
+  # 
+  pmf.interpolate(exprN)
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15n.pvd",mode=mode,pmf=pmf.vector())
+  plt.plot(ts,concs,"k-",label="neutral") 
+  # 
+  pmf.interpolate(exprA)
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15a.pvd",mode=mode,pmf=pmf.vector())
+  plt.plot(ts,concs,"b-",label="attractive") 
+  # 
+  pmf.interpolate(exprR)
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15r.pvd",mode=mode,pmf=pmf.vector())
+  plt.plot(ts,concs,"r-",label="repulsive") 
+
+  ##
+  plt.legend(loc=4)
+  title = "Diffusion profile: "
+  plt.title(title)
+  plt.ylabel("Conc (at outer bound)") 
+  plt.xlabel("time") 
+  figname = "comp.png"
+  plt.gcf().savefig(figname)
+
+
+  
   
 
-def doit():
-  import matplotlib.pylab as plt
+def valid1():
   plt.figure()
   #
   mode = "pointsource"
@@ -191,12 +239,9 @@ Notes:
     print "arg"
 
   for i,arg in enumerate(sys.argv):
-    if(arg=="-arg1"):
-      arg1=sys.argv[i+1] 
-
-
-
-
-  doit()
+    if(arg=="-valid1"):
+      valid1()
+    if(arg=="-valid2"):
+      valid2()
 
 
