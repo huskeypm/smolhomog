@@ -38,7 +38,7 @@ class MyEquation(NonlinearProblem):
         self.reset_sparsity = False
 
 
-def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pmf=1.):
+def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=1.):
   D = Constant(Diff) 
   # Create mesh and define function space
   mesh = Mesh(fileName)     
@@ -98,7 +98,7 @@ def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pm
   # then 
   # Int[ e^-*(u'*v - u0'*v - -dt(grad(u')*grad(v))] 
   dt=15.0   
-  T=500  
+  T=1000 
   expnpmf=Function(V)
   expnpmf.vector()[:] = np.exp(-pmf/0.6)
   RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
@@ -143,9 +143,24 @@ def tsolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pm
 
   return (ts,concs)
 
+def DHExpression(x0=0,x1=0):
+  if(exact==1):
+    import sys
+    sys.path.append("/home/huskeypm/sources/fenics-pb/pete") 
+    import poissonboltzmann as pb
+    pb.params.center=np.array([x0,x1,0.]) need to adjust DH to use center (power(x[0]-c0,2) 
+    pb.params.molrad = what is radius from original mesh eneration? 
+    exprA = pb.DebyeHuckelExpr()
+
+  else:
+    exprA = Expression("-3*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.1)",x0=x0,x1=x1)
+
+  return exprA
+
+
 def valid2():
   mode = "bc"
-  mesh = Mesh("m15.xml") 
+  mesh = Mesh("m15.xml.gz") 
   V = FunctionSpace(mesh,"CG",1)
   #exprA = Expression("-0.1*(x[0]+10)") # attractive 
   #exprR = Expression(" 0.1*(x[0]+10)") # repulsive     
@@ -159,7 +174,7 @@ def valid2():
     for j in np.arange(8):
       x0 = -7.+2*i
       x1 = -7.+2*j
-      exprA = Expression("-2*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.3)",x0=x0,x1=x1)   
+      exprA = DHExpression(x0,x1)
       pmf.interpolate(exprA)
       mask += pmf.vector()[:]
 
@@ -175,13 +190,13 @@ def valid2():
   pmfr.vector()[:] = -1*pmf.vector()[:] 
   
   plt.figure()
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
   plt.plot(ts,concs,"k--",label="neutral") 
   # 
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15a.pvd",mode=mode,pmf=pmfa.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15a.pvd",mode=mode,pmf=pmfa.vector())
   plt.plot(ts,concs,"b.",label="attractive") 
   # 
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15r.pvd",mode=mode,pmf=pmfr.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15r.pvd",mode=mode,pmf=pmfr.vector())
   plt.plot(ts,concs,"r.",label="repulsive") 
 
   ##
@@ -205,19 +220,19 @@ def valid1():
   #(ts,concs) = tsolve(Diff=1.,fileName="m25.xml",outName="o25_1.pvd",mode=mode) 
   #plt.plot(ts,concs,"k-",label="Diff=1., m25")
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml",outName="o15.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15.pvd",mode=mode) 
   plt.plot(ts,concs,"b-",label="Diff=1.0, m15",lw=1)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName="m25.xml",outName="o25.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m25.xml.gz",outName="o25.pvd",mode=mode) 
   plt.plot(ts,concs,"b-",label="Diff=1.0, m25",lw=2)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName="m50.xml",outName="o50.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m50.xml.gz",outName="o50.pvd",mode=mode) 
   plt.plot(ts,concs,"b-.",label="Diff=1.0, m50",lw=3)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName="m75.xml",outName="o75.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m75.xml.gz",outName="o75.pvd",mode=mode) 
   plt.plot(ts,concs,"b-.",label="Diff=1.0, m75",lw=4)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName="m85.xml",outName="o85.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m85.xml.gz",outName="o85.pvd",mode=mode) 
   plt.plot(ts,concs,"b--",label="Diff=1.0, m85",lw=5)
     
   
@@ -261,5 +276,6 @@ Notes:
       valid1()
     if(arg=="-valid2"):
       valid2()
+
 
 
