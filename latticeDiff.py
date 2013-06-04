@@ -6,6 +6,9 @@ import numpy as np
 import matplotlib.pylab as plt
 
 
+root = "example/lattice/"
+class empty:pass
+
 class LeftBoundary(SubDomain):
   def inside(self,x,on_boundary):
     edge = (np.abs(x[0]- -8) < DOLFIN_EPS) 
@@ -37,8 +40,60 @@ class MyEquation(NonlinearProblem):
           bc.apply(A)
         self.reset_sparsity = False
 
+def steadysolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pmf=1.): 
+  problem = probdef(Diff,fileName,mode,pmf) 
 
-def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=1.):
+  ds = problem.ds
+  pmf = problem.pmf
+  V = problem.V
+  #du = problem.du
+  u = problem.u
+  q = problem.q
+  D = problem.D
+  bcs= problem.bcs
+  
+  # borrow other setup
+  form = -inner(D*expnpmf*grad(u), grad(q))*dx
+  a = lhs(form) 
+  L = rhs(form) 
+
+  x = Function(V) 
+  solve(a==L,x,bcs=bcs)
+
+
+  # 2 D: 
+  # get steady soln
+
+  # evaluate flux at RHS
+  jRHS_avg = 1 
+ 
+  # conc at LHS, LHS
+  cLHS = 1
+
+  # del x 
+  del_x = 1
+  del_c_del_x = (cRHS - cLHS) / del_x 
+
+  # 1 D: 
+  # jRHS = Deff * del c / del x 
+  Deff = jRHS_avg / del_c_del_x
+ 
+
+  # get total cell vol
+  # minimax
+
+  # get accessible vol 
+  # assemble()
+
+
+  lower=1 
+  print "Deff  lower upper " 
+
+  return Deff 
+
+def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.):
+
+  
   D = Constant(Diff) 
   # Create mesh and define function space
   mesh = Mesh(fileName)     
@@ -90,6 +145,33 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
 
   ds = Measure("ds")[subdomains]
 
+  problem = empty()
+  problem.V = V
+  problem.ds = ds 
+  problem.du = du 
+  problem.pmf = pmf 
+  problem.bcs = bcs 
+  problem.u = u 
+  problem.q = q 
+  problem.D = D 
+  problem.u0 = u0 
+  
+
+  return problem
+
+
+def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=1.):
+  problem = probdef(Diff,fileName,mode,pmf) 
+
+  ds = problem.ds
+  pmf = problem.pmf
+  V  = problem.V
+  u = problem.u
+  du = problem.du
+  q = problem.q
+  D = problem.D
+  u0 = problem.u0
+  bcs = problem.bcs
   
   ## weak form 
   # weak form of smol is
@@ -144,12 +226,15 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   return (ts,concs)
 
 def DHExpression(x0=0,x1=0):
+  exact=0
   if(exact==1):
     import sys
     sys.path.append("/home/huskeypm/sources/fenics-pb/pete") 
     import poissonboltzmann as pb
-    pb.params.center=np.array([x0,x1,0.]) need to adjust DH to use center (power(x[0]-c0,2) 
-    pb.params.molrad = what is radius from original mesh eneration? 
+    pb.params.center=np.array([x0,x1,0.])
+    print "need to adjust DH to use center (power(x[0]-c0,2) "
+    pb.params.molrad = 1. 
+    print "WARNING: what is radius from original mesh eneration? "
     exprA = pb.DebyeHuckelExpr()
 
   else:
@@ -160,7 +245,7 @@ def DHExpression(x0=0,x1=0):
 
 def valid2():
   mode = "bc"
-  mesh = Mesh("m15.xml.gz") 
+  mesh = Mesh(root+"m15.xml.gz") 
   V = FunctionSpace(mesh,"CG",1)
   #exprA = Expression("-0.1*(x[0]+10)") # attractive 
   #exprR = Expression(" 0.1*(x[0]+10)") # repulsive     
@@ -190,13 +275,13 @@ def valid2():
   pmfr.vector()[:] = -1*pmf.vector()[:] 
   
   plt.figure()
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m15.xml.gz",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
   plt.plot(ts,concs,"k--",label="neutral") 
   # 
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15a.pvd",mode=mode,pmf=pmfa.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m15.xml.gz",outName="o15a.pvd",mode=mode,pmf=pmfa.vector())
   plt.plot(ts,concs,"b.",label="attractive") 
   # 
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15r.pvd",mode=mode,pmf=pmfr.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m15.xml.gz",outName="o15r.pvd",mode=mode,pmf=pmfr.vector())
   plt.plot(ts,concs,"r.",label="repulsive") 
 
   ##
@@ -255,7 +340,7 @@ Purpose:
  
 Usage:
 """
-  msg+="  %s validation/intact" % (scriptName)
+  msg+="  %s -valid1/-valid2" % (scriptName)
   msg+="""
   
  
@@ -276,6 +361,8 @@ Notes:
       valid1()
     if(arg=="-valid2"):
       valid2()
+    if(arg=="-valid3"):
+      steadysolve(fileName=root+"m85.xml.gz")
 
 
 
