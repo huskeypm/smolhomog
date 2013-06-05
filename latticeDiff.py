@@ -43,8 +43,9 @@ class MyEquation(NonlinearProblem):
           bc.apply(A)
         self.reset_sparsity = False
 
-def steadysolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pmf=1.): 
-  problem = probdef(Diff,fileName,mode,pmf,debug=True) 
+def steadysolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pmf=0.): 
+
+  problem = probdef(Diff,fileName,mode,pmf) #,debug=True) 
 
   ds = problem.ds
   pmf = problem.pmf
@@ -78,18 +79,17 @@ def steadysolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsourc
   # get steady soln
   x = Function(V) 
   solve(a==L,x,bcs=bcs)
-  File("x.pvd") << x
+  #File("x.pvd") << x
 
   # evaluate flux at RHS
   up = Function(V)  
   up.vector()[:] = expnpmf.vector()[:] * x.vector()[:]
-  up = project(expnpmf*x)
+  File(outName) << up
+  #up = project(expnpmf*x)
   print "Unprojected Solution range: %f - %f " %  (min(x.vector()),max(x.vector()))
-  up.vector()[:] = x.vector()[:] * expnpmf.vector()[:]
-  pmff = Function(V)
-  pmff.vector()[:] =0.0       
+  print "Projected Solution range: %f - %f " %  (min(up.vector()),max(up.vector()))
 
-  Jp = D * grad(up)  + D *  beta * up * grad(pmff)
+  Jp = D * grad(up)  + D *  beta * up * grad(pmf)
   #boundary_flux_terms = assemble(dot(Jp, tetrahedron.n)*ds(rMarker),
   #                              exterior_facet_domains = subdomains) 
   subdomainMarker = rMarker
@@ -129,7 +129,7 @@ def steadysolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsourc
   print "Deff %4.2f lower: %4.2f upper: %4.2f " %\
     (Deff, 2*volFrac/3,2*volFrac/(3-volFrac))
 
-  return Deff 
+  return Deff,volFrac
 
 def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False):
 
@@ -143,8 +143,8 @@ def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False)
   else:
     mesh = Mesh(fileName)     
 
-  print np.min(mesh.coordinates(),axis=0)
-  print np.max(mesh.coordinates(),axis=0)
+  #print np.min(mesh.coordinates(),axis=0)
+  #print np.max(mesh.coordinates(),axis=0)
   V = FunctionSpace(mesh, "Lagrange", 1)
   
   
@@ -191,6 +191,11 @@ def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False)
     bc.apply(f.vector())
     File("bc.pvd") << f
 
+  if(pmf==0):
+    pmf = Function(V)
+    pmf.vector()[:]=0.
+  else:
+   print "Using input pmf"
   ds = Measure("ds")[subdomains]
 
   problem = empty()
@@ -206,7 +211,7 @@ def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False)
   problem.D = D 
   problem.u0 = u0 
   problem.expnpmf=Function(V)
-  problem.expnpmf.vector()[:] = np.exp(-pmf*beta)
+  problem.expnpmf.vector()[:] = np.exp(-pmf.vector()[:]*beta)
   
 
   return problem
@@ -278,7 +283,7 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
 
   return (ts,concs)
 
-def DHExpression(x0=0,x1=0):
+def DHExpression(x0=0,x1=0,prefac=1,k=10):
   exact=0
   if(exact==1):
     import sys
@@ -291,7 +296,9 @@ def DHExpression(x0=0,x1=0):
     exprA = pb.DebyeHuckelExpr()
 
   else:
-    exprA = Expression("-3*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.1)",x0=x0,x1=x1)
+    #exprA = Expression("-1*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.1)",x0=x0,x1=x1)
+    exprA = Expression("-prefac*exp(-k*sqrt((pow(x[0]-x0,2) + pow(x[1]-x1,2))))/sqrt((pow(x[0]-x0,2) + pow(x[1]-x1,2)))",
+      prefac=prefac,k=k, x0=x0,x1=x1)
 
   return exprA
 
@@ -313,6 +320,87 @@ def CalcPMF(V):
 
   return(pmf)
 
+def valid4():
+  case = "m50"
+  fileName = root+case+".xml.gz"
+  V = FunctionSpace( Mesh(fileName ), "CG", 1) 
+  pmf = CalcPMF(V)
+  prefacs = np.linspace(-0.1,0.1,11) 
+  deffs = np.zeros(np.shape(prefacs)[0])
+  for i,prefac in enumerate(prefacs):
+    prefac=0.
+    fileName = root+case+".xml.gz"
+    pmfi = Function(V)
+    pmfi.vector()[:] = prefac*pmf.vector()[:]
+    (deffs[i],volFrac) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd",pmf=pmfi)
+
+
+  plt.figure()
+  plt.plot(prefacs,deffs,"k-",label="prefacs")
+  nidx = np.where(prefacs==0)
+  plt.plot(prefacs[nidx],deffs[nidx],"k.",label="neutral")
+  plt.legend(loc=4)
+  title = "Deff vs potential"
+  plt.title(title)
+  plt.ylim([0,1])
+  plt.ylabel("D_eff/D")
+  plt.xlabel("$\phi$")
+  figname ="stystate_deff_vs_potent.png"
+  plt.gcf().savefig(figname)
+  
+  
+
+
+def valid3():
+  #
+  mode = "pointsource"
+  mode = "bc"
+  cases = ["m15","m25","m50","m75","m85"]
+  deffNs = np.zeros(len(cases))
+  deffAs = np.zeros(len(cases))
+  deffRs = np.zeros(len(cases))
+  volFracs = np.zeros(len(cases))
+
+
+  for i,case in enumerate(cases):
+    fileName = root+case+".xml.gz"
+    V = FunctionSpace( Mesh(fileName ), "CG", 1) 
+    pmf = CalcPMF(V)
+    ## create pmfs going into attractive, neutral, repulseive cases
+    pmfn = Function(V)
+    pmfn.vector()[:] = 0.
+    pmfa = Function(V)
+    pmfa.vector()[:] = pmf.vector()[:] 
+    pmfr = Function(V)
+    pmfr.vector()[:] = -1*pmf.vector()[:] 
+  
+    print "--Neutral"
+    (deffNs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd",pmf=pmfn)
+    print "--Attractive"
+    (deffAs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15a.pvd",pmf=pmfa)
+    print "--Repulsive"
+    (deffRs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15r.pvd",pmf=pmfr)
+    #quit()
+
+  #valid  = np.where(deffs < 1.) 
+  #deffs = deffs[ valid ] 
+  #volFracs = volFracs [ valid ] 
+
+
+  plt.figure()
+  plt.plot(volFracs,deffNs,"k.",label="neutral")
+  plt.plot(volFracs,deffAs,"b.",label="attractive")
+  plt.plot(volFracs,deffRs,"r.",label="repulsive")
+  plt.plot(volFracs,2*volFracs/3,"k--",label="lower")
+  plt.plot(volFracs,2*volFracs/(3-volFracs),"k-.",label="upper")
+  plt.legend(loc=4)
+  title = "Deff from steady-state non-homogenized lattice"
+  plt.title(title)
+  plt.ylabel("D_eff/D")
+  plt.xlabel("$\phi$")
+  figname ="stystate_deff.png"
+  plt.gcf().savefig(figname)
+  
 
 
 def valid2():
@@ -420,7 +508,10 @@ Notes:
     if(arg=="-valid2"):
       valid2()
     if(arg=="-valid3"):
-      steadysolve(fileName=root+"m15.xml.gz")
+      valid3()
+    if(arg=="-valid4"):
+      valid4()
 
+  #raise RuntimeError(msg)
 
 
