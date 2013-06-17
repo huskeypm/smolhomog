@@ -195,7 +195,7 @@ def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False)
     pmf = Function(V)
     pmf.vector()[:]=0.
   else:
-   print "Using input pmf"
+    raise RuntimeError("Something is incorrectly done with PMF, since even neutral case is wrong (see validInert, commented oput") 
   ds = Measure("ds")[subdomains]
 
   problem = empty()
@@ -320,6 +320,7 @@ def CalcPMF(V):
 
   return(pmf)
 
+# Deff for wrt 'prefac'
 def valid4():
   case = "m50"
   fileName = root+case+".xml.gz"
@@ -351,6 +352,7 @@ def valid4():
   
 
 
+# Deff for wrt vol frac for neutral, positive and negative interations
 def valid3():
   #
   mode = "pointsource"
@@ -401,6 +403,46 @@ def valid3():
   figname ="stystate_deff.png"
   plt.gcf().savefig(figname)
   
+
+# Deff for wrt vol frac for neutral
+def validInert():
+  #
+  mode = "bc"
+  cases = ["m15","m25","m50","m75","m85"]
+  deffNs = np.zeros(len(cases))
+  deffNIs = np.zeros(len(cases))
+  volFracs = np.zeros(len(cases))
+
+
+  for i,case in enumerate(cases):
+    fileName = root+case+".xml.gz"
+    V = FunctionSpace( Mesh(fileName ), "CG", 1)
+    pmfn = Function(V)
+    pmfn.vector()[:] = 0.
+
+    print "--Neutral"
+    (deffNs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd")                  
+    #(deffNIs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd",pmf=pmfn)
+
+  #valid  = np.where(deffs < 1.) 
+  #deffs = deffs[ valid ] 
+  #volFracs = volFracs [ valid ] 
+
+
+  plt.figure()
+  plt.plot(volFracs,deffNs,"k.",label="neutral (sphere lattice)")
+  #plt.plot(volFracs,deffNIs,"b.",label="neutral (sphere lattice/interp'd PMF)")
+  plt.plot(volFracs,2*volFracs/3,"k--",label="lower (for cube lattice)")
+  plt.plot(volFracs,2*volFracs/(3-volFracs),"k-.",label="upper (for cube lattice)")
+  plt.legend(loc=4)
+  title = "Deff from steady-state non-homogenized lattice"
+  plt.title(title)
+  plt.ylabel("D_eff/D")
+  plt.xlabel("$\phi$")
+  figname ="stystate_deff_inert.png"
+  plt.gcf().savefig(figname)
+
+
 
 
 def valid2():
@@ -511,6 +553,8 @@ Notes:
       valid3()
     if(arg=="-valid4"):
       valid4()
+    if(arg=="-validInert"):
+      validInert()
 
   #raise RuntimeError(msg)
 
