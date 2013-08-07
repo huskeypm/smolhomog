@@ -5,6 +5,7 @@ sys.path.append("/home/huskeypm/sources/modified-pb/example")
 sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
 sys.path.append("/net/home/huskeypm/Sources/smolhomog/example/noobstacle/")
 sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
+import matplotlib.gridspec as gridspec
 import testing as test
 
 import poissonboltzmann as pb
@@ -59,14 +60,15 @@ def interp2d(mesh,x,mode="line"):
 def fig7Murad():
   print "WARNING: should do for bilayer, not cylinder [graham eqn, etc]"
   parms.res=0.75 # slow
+  parms.res=0.50 # slow
   #parms.res=3 # fast  
   # separate spheres by 2nm [equiv to H=1nm in Fig 7]
     
   domRads=[20.,30.] # A 
   parms.molRad=10. # A   
   abssigma = 0.01 #  \cite{Anonymous:pvWPv9jI} for lipid bilayer 
-  nCbs=6
-  cbs =10.**(-1*np.arange(nCbs) )
+  nCbs=15
+  cbs =10.**(-1*np.linspace(0,6,nCbs))
   nDomRads = np.shape(domRads)[0] 
 
   #cbs=[1,1]
@@ -107,7 +109,6 @@ def fig7Murad():
     
   fig=plt.figure()
   #ax = plt.subplot(211)  
-  import matplotlib.gridspec as gridspec
   # make plot with different sizes of subplots 
   gs = gridspec.GridSpec(2, 1, height_ratios=[5, 1]) 
   ax = plt.subplot(gs[0])
@@ -126,7 +127,7 @@ def fig7Murad():
   ax.set_ylabel('D')
   ax.set_xlabel('[cb] [M]')
   ax.legend(loc=0,ncol=2,bbox_to_anchor=(1.10, -0.2))        
-  plt.gcf().savefig("fig7murad.png")        
+  plt.gcf().savefig("fig7muradvalid.png")        
   
         
 
@@ -134,7 +135,7 @@ def fig7Murad():
 
 # for validating PB equation against Fig 3 of Bourbatacha
 def fig3():
-  print "HSDFS"
+  parms.res=3
   plt.figure()
   parms.mode='linear'
   # Mesh is made according to Bourbatache
@@ -159,26 +160,28 @@ def fig3():
   
   # VALIDATED Potential looks validated against Fig 3 of Bourbatche 2012 paper
   sigma = -0.01 # C/m^2
-  cb = 50 * 1e-3 # mol/m^3 --> M
+  cb = 50 * 1e-3 # (no lower, since otherwise Grahame invalid) mol/m^3 --> M
+  
   parms.ionC = cb
   boundaryPotential = pb.Grahame(sigma,cb)
   (V,x)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
   gy,interp=interp2d(mesh,x)
-  plt.plot(gy,interp,"r",label="psi0=%4.1f mV [I] %4.2f M" % (boundaryPotential,parms.ionC))
+  plt.plot(gy,interp,"r",label="$\psi_0$=%4.1f mV [I] %4.2f M" % (boundaryPotential,parms.ionC))
 
   cb = 200 * 1e-3 # mol/m^3 --> M
   parms.ionC = cb
   boundaryPotential = pb.Grahame(sigma,cb)
   (V,x)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
   gy,interp=interp2d(mesh,x)
-  plt.plot(gy,interp,"g",label="psi0=%4.1f mV [I] %4.2f M" % (boundaryPotential,parms.ionC))
+  plt.plot(gy,interp,"g",label="$\psi_0$=%4.1f mV [I] %4.2f M" % (boundaryPotential,parms.ionC))
    
-  plt.legend(loc=0)
+  plt.legend(loc=4)
   plt.xlim([parms.molRad,parms.domRad])
   #plt.ylim([0,-45])
-  plt.xlabel("1e-8 m")
-  plt.gca().invert_yaxis()
-  plt.gcf().savefig("bourbfig3.png")
+  plt.xlabel("[A]")     
+  plt.ylabel("$\psi$ [mV]") 
+  #plt.gca().invert_yaxis()
+  plt.gcf().savefig("fig3valid.png")
 
 def fig7():   
     #res = 10 # min res for cb=86, sigma = 0.0185
@@ -202,7 +205,7 @@ def fig7():
     plt.xlabel("A")
     clb=plt.colorbar()
     clb.set_label("[mV]")
-    plt.gcf().savefig("fig7.png")
+    plt.gcf().savefig("fig7valid.png")
 
     
 
@@ -243,17 +246,19 @@ def runCase():
 # for validating against fig 9 of bourbatache 
 def fig9ops():
   # all cases 
+  parms.res = 10 # quick 
+  parms.res=0.5   
   
   parms.domRad=0.5e-8 * m_to_A # A 
   sigmas = -1*np.array([0,0.01,0.05,0.1, 0.15]) # [C/m^2]
   #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
-  sigmas = np.array([0.01,0,-0.01])      
-  nMolRads = 3  
-  molRads = np.linspace(parms.domRad*0.1,parms.domRad*0.9,nMolRads)
+  nSigma = 7 ## DO NOT CHANGE ME SINCE LABELS ARE HARD CODED  
+  sigmas = np.linspace(-0.15,0.15,nSigma)       
+  nMolRads = 8; # 8  
+  molRads = np.linspace(parms.domRad*0.01,parms.domRad*0.9,nMolRads)
   cb = 500 * 1e-3 # mol/m^3 --> M  
   parms.ionC = cb
 
-  nSigma = np.shape(sigmas)[0]
   outs = np.zeros([nSigma,nMolRads])
   vFracs = np.zeros(nMolRads)  
     
@@ -278,27 +283,31 @@ def fig9():
     vFracs,outs,sigmas = fig9ops()
     #vFracs,outs,sigmas = test2()
     ns = np.shape(outs)[0]
+
+    gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1]) 
+    ax = plt.subplot(gs[0])
+    labs = ['b-','b-.','b--','k-','r--','r-.','r-']
     
     for j in range(ns):
-      plt.plot(vFracs, outs[j,:],label="$\sigma$=%5.3f $[C/m^2]$" % sigmas[j] )
+      ax.plot(vFracs, outs[j,:],labs[j],label="$\sigma$=%5.3f $[C/m^2]$" % sigmas[j] )
     
     hs = vFracs/(2-vFracs)      
-    plt.plot(vFracs, hs,'k.',label="HS")      
-    plt.legend(loc=0)
-    plt.xlabel("$\phi$") 
-    plt.ylabel("D")
-    plt.xlim([0.0,1])
-    plt.grid(True)  
-    plt.title("My version of fig 9, bourb")
-    plt.gcf().savefig("fig9.png")     
+    ax.plot(vFracs, hs,'k.',label="HS")      
+    ax.legend(loc=0,ncol=2,bbox_to_anchor=(0.9, -0.13))        
+    ax.set_xlabel("$\phi$") 
+    ax.set_ylabel("D")
+    ax.set_xlim([0.0,1])
+    ax.grid(True)  
+    #plt.title("My version of fig 9, bourb")
+    plt.gcf().savefig("fig9valid.png")     
 
 def fig8():
+  parms.res=1
   parms.domRad=0.5e-8 * m_to_A # A 
-  sigmas = -1*np.array([0,0.01,0.05,0.1, 0.15]) # [C/m^2]
-  #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
-  sigmas =np.array([0.10,0.05,0.01,0,-0.01,-0.05,-0.1])      
-  parms.molRad = 0.4e-8*m_to_A
   cb = 86 * 1e-3 # mol/m^3 --> M  
+  #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
+  sigmas =np.linspace(0.1,-0.1,9)
+  parms.molRad = 0.4e-8*m_to_A
   parms.ionC = cb
 
   nSigma = np.shape(sigmas)[0]
@@ -313,18 +322,18 @@ def fig8():
   Dps=Ds[idx]
   sps=sigmas[idx]
 
-  idx=np.where(sigmas<0)
+  idx=np.where(sigmas<=0)
   Dms=Ds[idx]
   sms =np.abs(sigmas[idx])
 
   plt.figure()  
   plt.plot(sms,Dms,'b',label="$\sigma< 0$")
   plt.plot(sps,Dps,'r',label="$\sigma> 0$")
-  plt.xlabel("$|\sigma|$ [C/m^2]")
+  plt.xlabel("$|\sigma|$ $[C/m^2]$")
   plt.ylabel("D")
   plt.legend(loc=0)
   plt.grid(True)
-  plt.gcf().savefig("fig8.png") 
+  plt.gcf().savefig("fig8valid.png") 
 #test1()
 #test2()
 
