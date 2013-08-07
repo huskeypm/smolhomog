@@ -1,3 +1,14 @@
+
+import sys
+sys.path.append("/net/home/huskeypm/Sources/modified-pb/example")
+sys.path.append("/home/huskeypm/sources/modified-pb/example")
+sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
+sys.path.append("/net/home/huskeypm/Sources/smolhomog/example/noobstacle/")
+sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
+import testing as test
+
+import poissonboltzmann as pb
+
 #
 # Still in development 
 #
@@ -5,28 +16,125 @@ from dolfin import *
 import matplotlib.pyplot as plt
 import sys
 import numpy as np
-sys.path.append("/home/huskeypm/sources/modified-pb/example")
 import poissonboltzmann as pb
 parms = pb.parms
+
+parms.res =3       
+m_to_A = 1e10
+ 
+z = -1.  # lig charge    [Chloride]
+    
+F=96485.3365 # Faradays constant [C/mol]
+R = 8.3143   # Gas const [J/mol K] 
+T = 298.     # Temp [K] 
+RT_o_F=(R*T)/F*1e3  # [mV]   
+print RT_o_F
+Fz_o_RT=z/RT_o_F     # [1/mV] 
+
+import buildMesh   
 
 from scipy.interpolate import griddata
 
 # for interpolating solutions onto 2d mesh 
-def interp2d(mesh,x):
+def interp2d(mesh,x,mode="line"):
       maxr = parms.domRad    
       minr = -parms.domRad    
-      res = 10000
-      (gx,gy) = np.mgrid[0:0:1j,minr:maxr:res*1j]
-      interp = griddata(mesh.coordinates(),x.vector(),(gx,gy))
-      interp[np.isnan(interp)]=0
-      interp = np.reshape(interp,res)
-      gy = np.reshape(gy,res)
+      if(mode=="line"):   
+        res = 10000
+        (gx,gy) = np.mgrid[0:0:1j,minr:maxr:res*1j]
+        interp = griddata(mesh.coordinates(),x.vector(),(gx,gy))
+        interp[np.isnan(interp)]=0
+        interp = np.reshape(interp,res)
+        gy = np.reshape(gy,res)
 
-      return gy,interp
+        return gy,interp
+
+      if(mode=="plane"):# quarter plane
+        res = 1000
+        (gx,gy) = np.mgrid[0:maxr:res*1j,0:maxr:res*1j]
+        interp = griddata(mesh.coordinates(),x.vector(),(gx,gy))
+        interp[np.isnan(interp)]=0
+        return gx,gy,interp
+
+def fig7Murad():
+  print "WARNING: should do for bilayer, not cylinder [graham eqn, etc]"
+  parms.res=0.75 # slow
+  #parms.res=3 # fast  
+  # separate spheres by 2nm [equiv to H=1nm in Fig 7]
+    
+  domRads=[20.,30.] # A 
+  parms.molRad=10. # A   
+  abssigma = 0.01 #  \cite{Anonymous:pvWPv9jI} for lipid bilayer 
+  nCbs=6
+  cbs =10.**(-1*np.arange(nCbs) )
+  nDomRads = np.shape(domRads)[0] 
+
+  #cbs=[1,1]
+  #domRads=[1,1]   
+  #nDomRads=2
+  #nCbs = 2
+    
+  Dms = np.zeros([nCbs,nDomRads])  
+  Dps = np.zeros([nCbs,nDomRads])  
+    
+  #molRads=[molRads[8]]; 
+  #sigmas=[sigmas[0] ]
+  for i,cb in enumerate(cbs):
+    for j,domRad in enumerate(domRads):
+        class empty:pass
+
+        #results = empty()
+        #results.Ds=[1,1]
+        #Dms[i,j] = results.Ds[0]
+        #Dps[i,j] = results.Ds[0]
+        #continue
+
+        parms.domRad=domRad # A 
+        parms.ionC = cb
+        
+        parms.sigma = -1.*abssigma
+        results = runCase()
+        Dms[i,j] = results.Ds[0]
+        print results.Ds[0]    
+
+        parms.sigma = abssigma
+        results = runCase()
+        Dps[i,j] = results.Ds[0]
+        print results.Ds[0]    
+        
+  ps=['b','b--']
+  ms=['r','r--']
+    
+  fig=plt.figure()
+  #ax = plt.subplot(211)  
+  import matplotlib.gridspec as gridspec
+  # make plot with different sizes of subplots 
+  gs = gridspec.GridSpec(2, 1, height_ratios=[5, 1]) 
+  ax = plt.subplot(gs[0])
+  #plt.subplots_adjust(hspace= 0)    
+
+  for j in range(nDomRads):
+    ax.plot(cbs,Dms[:,j],ms[j],label="$\sigma=%5.3f$ $[C/m^2]$, H=%3.1f [A]" %\
+         (-1*abssigma,domRads[j]))
+    ax.plot(cbs,Dps[:,j],ps[j],label="$\sigma=%5.3f$ $[C/m^2]$, H=%3.1f [A]" %\
+         ( 1*abssigma,domRads[j]))
+
+  #plt.plot(cbs,Dms,'r',label="$\sigma=%5.3f$ $[C/m^2]$" % (-1*abssigma))
+  #plt.plot(cbs,Dps,'b',label="$\sigma=%5.3f$ $[C/m^2]$" % (abssigma))
+  ax.set_yscale('log')
+  ax.set_xscale('log')
+  ax.set_ylabel('D')
+  ax.set_xlabel('[cb] [M]')
+  ax.legend(loc=0,ncol=2,bbox_to_anchor=(1.10, -0.2))        
+  plt.gcf().savefig("fig7murad.png")        
+  
+        
+
 
 
 # for validating PB equation against Fig 3 of Bourbatacha
-def test1():
+def fig3():
+  print "HSDFS"
   plt.figure()
   parms.mode='linear'
   # Mesh is made according to Bourbatache
@@ -35,8 +143,10 @@ def test1():
   # 2e-8 m --> 20 nm, which implies R + 10 nm per box half-width --> 1100A
   fileIn= "/net/home/huskeypm/Sources/smolhomog/example/validation/cylinder.xml"
   fileIn= "/home/huskeypm/sources/smolhomog/example/validation/cylinder.xml"
-  parms.molRad=1000  # A 
-  parms.domRad=1100. # A 
+  parms.molRad=1e-8*m_to_A  # A 
+  parms.domRad=parms.molRad+1e-8*m_to_A # A 
+    
+  fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res)            
   mesh = Mesh(fileIn)
   
   # DH   
@@ -54,14 +164,14 @@ def test1():
   boundaryPotential = pb.Grahame(sigma,cb)
   (V,x)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
   gy,interp=interp2d(mesh,x)
-  plt.plot(gy,interp,"r",label="psi0=%4.1f mV [I] %3.1f M" % (boundaryPotential,parms.ionC))
+  plt.plot(gy,interp,"r",label="psi0=%4.1f mV [I] %4.2f M" % (boundaryPotential,parms.ionC))
 
   cb = 200 * 1e-3 # mol/m^3 --> M
   parms.ionC = cb
   boundaryPotential = pb.Grahame(sigma,cb)
   (V,x)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
   gy,interp=interp2d(mesh,x)
-  plt.plot(gy,interp,"g",label="psi0=%4.1f mV [I] %3.1f M" % (boundaryPotential,parms.ionC))
+  plt.plot(gy,interp,"g",label="psi0=%4.1f mV [I] %4.2f M" % (boundaryPotential,parms.ionC))
    
   plt.legend(loc=0)
   plt.xlim([parms.molRad,parms.domRad])
@@ -70,6 +180,31 @@ def test1():
   plt.gca().invert_yaxis()
   plt.gcf().savefig("bourbfig3.png")
 
+def fig7():   
+    #res = 10 # min res for cb=86, sigma = 0.0185
+    parms.molRad=20; # 0.3 e-8
+    parms.domRad=50; # 0.5e-8 m
+    fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res) 
+ 
+    cb=86e-3; sigma = -0.0185; # for comparing against Fig 7 ESP 
+    boundaryPotential = pb.Grahame(sigma,cb)
+    mesh = Mesh(fileIn)
+    
+    (V,potential)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
+    (gy,interp) = interp2d(mesh,potential)
+    plt.figure()
+    plt.plot(gy,interp)
+    plt.xlim([parms.molRad,parms.domRad])
+    plt.figure()
+    plt.subplot(111,aspect='equal')
+    (gx,gy,interp) = interp2d(mesh,potential,mode="plane")
+    plt.pcolormesh(gx,gy,interp)
+    plt.xlabel("A")
+    clb=plt.colorbar()
+    clb.set_label("[mV]")
+    plt.gcf().savefig("fig7.png")
+
+    
 
   #Fig. 9. Relative homogenized diffusion coefficient 
   #report Dhom/D for ep=0 -- 1.
@@ -77,67 +212,121 @@ def test1():
   #might also compare w Fig 7 of Murad, but should probably suffice to show opposite
   #tends noted for D- vs D+ [actually, they aren't opposites, so look closer]  
 
+def runCase():     
+    fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res)          
+    mesh = Mesh(fileIn)
+    
+    # get electro potential (OVERRIDING) 
+    boundaryPotential = pb.Grahame(parms.sigma,parms.ionC)
+    print "boundaryPotential ", boundaryPotential
+    # potential is mV 
+    (V,potential)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
+    
+    #(gy,interp) = interp2d(mesh,potential)
+    #plt.figure()
+    #plt.plot(gy,interp)
+    #plt.figure()
+    #(gx,gy,interp) = interp2d(mesh,potential,mode="plane")
+    #plt.pcolormesh(gx,gy,interp)
+    #plt.figure()
+    
+    #potential = Function(FunctionSpace(mesh,"CG",1))
+    #potential.vector()[:] = 0.  
+    
+    # multiply potential [mV] by F/RT [1/mV] s.t. potential is unitless 
+    unitlessPotential = Function(V)
+    unitlessPotential.vector()[:] = Fz_o_RT*potential.vector()[:] 
+    
+    results = test.doit(mode="hack2",discontinuous=False,dim=2,fileIn=fileIn,potential=unitlessPotential)
+    return results 
 
 # for validating against fig 9 of bourbatache 
-def test2():
-  sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
-  import testing as test
-  
+def fig9ops():
   # all cases 
-  sigmas = np.array([0.07, 0.05,  0.001 ]) 
+  
+  parms.domRad=0.5e-8 * m_to_A # A 
+  sigmas = -1*np.array([0,0.01,0.05,0.1, 0.15]) # [C/m^2]
+  #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
+  sigmas = np.array([0.01,0,-0.01])      
+  nMolRads = 3  
+  molRads = np.linspace(parms.domRad*0.1,parms.domRad*0.9,nMolRads)
+  cb = 500 * 1e-3 # mol/m^3 --> M  
+  parms.ionC = cb
+
   nSigma = np.shape(sigmas)[0]
-  molRads = np.linspace(100,900,10)
-  nMolRads = np.shape(molRads)[0]  
   outs = np.zeros([nSigma,nMolRads])
-  cb = 50 * 1e-3 # mol/m^3 --> M  
   vFracs = np.zeros(nMolRads)  
+    
+  #molRads=[molRads[8]]; 
+  #sigmas=[sigmas[0] ]
   for i,molRad in enumerate(molRads): 
         print molRad
         for j,sigma in enumerate(sigmas):
-            boundaryPotential = pb.Grahame(sigma,cb)
-            #(V,potential)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
-            #
-            #diff test.doit(mode="hack2",fileIn=fileIn,potential=potential)
-            #outs[j,i] = Deff
-            # vFracs[i] = V
+          print sigma
+          parms.sigma = sigmas[j]   
+          if(1):  
+            # make Mesh 
+            parms.molRad=molRad  # A 
+            results = runCase()
+            vFracs[i] = results.phi
+            outs[j,i] = results.Ds[0]
+            print results.Ds[0]
             
-            
-  ## SINGLE CASE   
-  # add routine to do a number of mesh sizes   
-  # now need 1e-8 m cell (100 A)   
-  fileIn= "/home/huskeypm/sources/smolhomog/example/validation/cylinder2.xml"
-  
+  return vFracs,outs,sigmas
         
-        
-  parms.molRad= 900  # A 
-  parms.domRad=1000. # A 
-  #mesh = Mesh(fileIn)
+def fig9():
+    vFracs,outs,sigmas = fig9ops()
+    #vFracs,outs,sigmas = test2()
+    ns = np.shape(outs)[0]
+    
+    for j in range(ns):
+      plt.plot(vFracs, outs[j,:],label="$\sigma$=%5.3f $[C/m^2]$" % sigmas[j] )
+    
+    hs = vFracs/(2-vFracs)      
+    plt.plot(vFracs, hs,'k.',label="HS")      
+    plt.legend(loc=0)
+    plt.xlabel("$\phi$") 
+    plt.ylabel("D")
+    plt.xlim([0.0,1])
+    plt.grid(True)  
+    plt.title("My version of fig 9, bourb")
+    plt.gcf().savefig("fig9.png")     
 
-  mesh = Mesh(fileIn)
-  # VALIDATED Potential looks validated against Fig 3 of Bourbatche 2012 paper
-
-  i=0; 
-  j=0
-  sigma = -0.01 # C/m^2
-  sigma = sigmas[j] 
-  cb = 50 * 1e-3 # mol/m^3 --> M
+def fig8():
+  parms.domRad=0.5e-8 * m_to_A # A 
+  sigmas = -1*np.array([0,0.01,0.05,0.1, 0.15]) # [C/m^2]
+  #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
+  sigmas =np.array([0.10,0.05,0.01,0,-0.01,-0.05,-0.1])      
+  parms.molRad = 0.4e-8*m_to_A
+  cb = 86 * 1e-3 # mol/m^3 --> M  
   parms.ionC = cb
-  boundaryPotential = pb.Grahame(sigma,cb)
-  #(V,potential)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
-  potential = Function(FunctionSpace(mesh,"CG",1))
-  potential.vector()[:] = 0.  
-  results = test.doit(mode="hack2",discontinuous=False,dim=2,fileIn=fileIn,potential=potential)
-  vFracs[i] = results.phi
-  outs[j,i] = results.Ds[0]
 
+  nSigma = np.shape(sigmas)[0]
+  Ds = np.zeros(nSigma)  
+  for i, sigma in enumerate(sigmas):
+    parms.sigma = sigma    
+    results = runCase() 
+    Ds[i] = results.Ds[0]
 
-  plt.figure()
-  plt.plot(vFracs, outs[j,:],label="$\sigma$=%5.1f" % sigmas[j] )
+  print Ds
+  idx=np.where(sigmas>=0)
+  Dps=Ds[idx]
+  sps=sigmas[idx]
+
+  idx=np.where(sigmas<0)
+  Dms=Ds[idx]
+  sms =np.abs(sigmas[idx])
+
+  plt.figure()  
+  plt.plot(sms,Dms,'b',label="$\sigma< 0$")
+  plt.plot(sps,Dps,'r',label="$\sigma> 0$")
+  plt.xlabel("$|\sigma|$ [C/m^2]")
+  plt.ylabel("D")
   plt.legend(loc=0)
-  plt.gcf().savefig("fig9.png")           
-  
-    
-    
+  plt.grid(True)
+  plt.gcf().savefig("fig8.png") 
+#test1()
+#test2()
 
 
 
@@ -146,4 +335,47 @@ def test2():
       
 
 #test1()
-test2()
+#!/usr/bin/env python
+import sys
+#
+# Revisions
+#       10.08.10 inception
+#
+
+if __name__ == "__main__":
+  import sys
+  scriptName= sys.argv[0]
+  msg="""
+Purpose: 
+ 
+Usage:
+"""
+  msg+="  %s -validation" % (scriptName)
+  msg+="""
+  
+ 
+Notes:
+
+"""
+  remap = "none"
+
+  if len(sys.argv) < 2:
+      raise RuntimeError(msg)
+
+  fileIn= sys.argv[1]
+  if(len(sys.argv)==3):
+    print "arg"
+
+  for i,arg in enumerate(sys.argv):
+    if(arg=="-fig3"):
+      fig3()
+    if(arg=="-fig7"):
+      fig7()
+    if(arg=="-fig7Murad"):
+      fig7Murad()
+    if(arg=="-fig8"):
+      fig8()
+    if(arg=="-fig9"):
+      fig9()
+
+

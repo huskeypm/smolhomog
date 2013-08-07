@@ -3,13 +3,12 @@ boxRad = 1000 # A
 sphereRad = 800 # A 
 res = 100 # division size 
 
-
 ## make box via gmsh and write 
 def makeGmshFile(boxRad,sphereRad,res,caseName="cylinderTmp.geo"): 
   fileLine="""
 b=%f;
 c=%f;
-l=%d;
+l=%f;
 Point(1) = {-b, -b, 0, l};
 Point(2) = {b, -b, 0, l};
 Point(3) = {b, b, 0, l};
@@ -44,6 +43,7 @@ def makeGmshMesh(boxRad,sphereRad,res):
   msh = caseName.replace(".geo",".msh") 
   xml = caseName.replace(".geo",".xml") 
 
+  print res
   makeGmshFile(boxRad,sphereRad,res,caseName=caseName)
 
   from subprocess import call,check_output
