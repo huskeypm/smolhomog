@@ -88,6 +88,7 @@ class Omega1(SubDomain):
 #                 If False, a smoothly varying PMF is used 
 # pmfScale - scales Gaussian used for pmf when  discontinuous=False
 # fileIn - used with mode='hack2' to import externally-computed potential 
+# potential MUST be unitless (e.g. multiply by F/RT before passing into this function)
 def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
          mode="default",pmfScale=1, pmfWidth=0.02, plot=False,outName="img.png",fileIn="",potential=""):
     ## params
@@ -168,12 +169,15 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
           plt.title("pmf") 
         else:
           print "Using imported grid" 
-          print "WARNING: wrong beta"
-          beta = 1/0.6
           pmf = Function(FunctionSpace(mesh,"CG",1))
           print np.shape(pmf.vector()[:] )
           print np.shape(potential.vector()[:] )
-          pmf.vector()[:] = np.exp(-beta * potential.vector()[:]) 
+          # Higher (less favorable) potentials reduce np.exp toward 0
+          # MUST have unitless potential here (e.g. already divided by kT) 
+          pmf.vector()[:] = np.exp(-1*potential.vector()[:]) 
+          ar = np.array(pmf.vector()[:])
+          print "Exp(-p) min %f" % (np.min(ar))
+          print "Exp(-p) max %f" % (np.max(ar))
           k = pmf  
     
     
@@ -221,64 +225,64 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     File("wrong.pvd") << z
     
     ## Show chi solution  
-    
-    if(dim==1):
-        gx = np.mgrid[0:1:100j]
-        interp0 = griddata(mesh.coordinates(),u.vector(),(gx))
-        interp1 = interp0
-        
-    else:
-        Vs = FunctionSpace(mesh,"CG",1)
-        up = project(u[0],V=Vs)    
-       
-        gx,gy = np.mgrid[0:1:100j,0.5:0.5:1j]
-        interp1 = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        gx,gy = np.mgrid[0:1:100j,0:1:100j]
-        interp0 = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        
-        
-        up = project(u[1],V=Vs) 
-        interpx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        plt.figure()
-        plt.subplot(421)
-        plt.pcolormesh(interp0.T)
-        plt.title("u0") 
-        plt.subplot(422)
-        plt.pcolormesh(interpx.T)
-        #def doplt(up):
-        #    interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        #    plt.pcolormesh(interpgx.T)
-        plt.title("u1")
-            
-        _component = grad(u[0])
-        up = project(_component[0],V=Vs) 
-        interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        plt.subplot(423)
-        plt.pcolormesh(interpgx.T)
-        plt.title("du0")       
-        _component = grad(u[1])
-        up = project(_component[1],V=Vs) 
-        interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        plt.subplot(424)
-        plt.pcolormesh(interpgx.T)
-        plt.title("du1")     
-        
-        
-        _component = grad(u[0])
-        up = project(k*(_component[0]),V=Vs) 
-        interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        plt.subplot(425)
-        plt.pcolormesh(interpgx.T)
-        plt.title("du0")    
-        
+    if(plot): 
+      if(dim==1):
+          gx = np.mgrid[0:1:100j]
+          interp0 = griddata(mesh.coordinates(),u.vector(),(gx))
+          interp1 = interp0
+          
+      else:
+          Vs = FunctionSpace(mesh,"CG",1)
+          up = project(u[0],V=Vs)    
+         
+          gx,gy = np.mgrid[0:1:100j,0.5:0.5:1j]
+          interp1 = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          gx,gy = np.mgrid[0:1:100j,0:1:100j]
+          interp0 = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          
+          
+          up = project(u[1],V=Vs) 
+          interpx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          plt.figure()
+          plt.subplot(421)
+          plt.pcolormesh(interp0.T)
+          plt.title("u0") 
+          plt.subplot(422)
+          plt.pcolormesh(interpx.T)
+          #def doplt(up):
+          #    interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          #    plt.pcolormesh(interpgx.T)
+          plt.title("u1")
               
-        _component = grad(u[0])
-        up = project(k*(_component[0]+1.),V=Vs) 
-        interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
-        plt.subplot(427)
-        plt.pcolormesh(interpgx.T)
-        plt.title("k*du0+1)")    
-        print "Assemble x %f" % (assemble(up*dx(0) + up*dx(1),mesh=mesh))
+          _component = grad(u[0])
+          up = project(_component[0],V=Vs) 
+          interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          plt.subplot(423)
+          plt.pcolormesh(interpgx.T)
+          plt.title("du0")       
+          _component = grad(u[1])
+          up = project(_component[1],V=Vs) 
+          interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          plt.subplot(424)
+          plt.pcolormesh(interpgx.T)
+          plt.title("du1")     
+          
+          
+          _component = grad(u[0])
+          up = project(k*(_component[0]),V=Vs) 
+          interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          plt.subplot(425)
+          plt.pcolormesh(interpgx.T)
+          plt.title("du0")    
+          
+                
+          _component = grad(u[0])
+          up = project(k*(_component[0]+1.),V=Vs) 
+          interpgx = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+          plt.subplot(427)
+          plt.pcolormesh(interpgx.T)
+          plt.title("k*du0+1)")    
+          print "Assemble x %f" % (assemble(up*dx(0) + up*dx(1),mesh=mesh))
         
         
       
@@ -306,12 +310,13 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
         forms.append(grad_Xi_component)
         
         _component = grad(u)
-        g=project(_component,FunctionSpace(mesh,"CG",1))
-        interp2 = griddata(mesh.coordinates(),g.vector(),(gx))
-        plt.figure()
-        plt.plot(interp2,label="grad")
-        plt.plot(interp1,label="sol")
-        plt.legend()
+        if(plot): 
+          g=project(_component,FunctionSpace(mesh,"CG",1))
+          interp2 = griddata(mesh.coordinates(),g.vector(),(gx))
+          plt.figure()
+          plt.plot(interp2,label="grad")
+          plt.plot(interp1,label="sol")
+          plt.legend()
  
     
     if(dim==2):
@@ -321,10 +326,11 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
             grad_Xi_component = k*(inner(grad(u[i]),Constant((v[0],v[1]))) + Constant(1))
             _component = (inner(grad(u[i]),Constant((v[0],v[1]))))
             _component = grad(u[i])
-            g=project(_component[1],FunctionSpace(mesh,"CG",1))
-            interp2 = griddata(mesh.coordinates(),g.vector(),(gx,gy))
-            print "inerpmin %f" % (np.min(interp2[:,50]))
-            if(i==1):
+            if(plot): 
+             g=project(_component[1],FunctionSpace(mesh,"CG",1))
+             interp2 = griddata(mesh.coordinates(),g.vector(),(gx,gy))
+             print "inerpmin %f" % (np.min(interp2[:,50]))
+             if(i==1):
               plt.figure()
               plt.pcolormesh(interp2.T)
               plt.colorbar()
@@ -336,6 +342,7 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
               interp2 = griddata(mesh.coordinates(),g.vector(),(gx,gy)) 
               plt.plot(gx[:,0],interp2,label="grad")
               plt.legend()  
+            # append form 
             forms.append(grad_Xi_component)
             
     # Evaluate form 
@@ -360,8 +367,9 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     results.phi = phi
     results.Ds = Ds
     results.Dsanal= Dsanal
-    results.interp1 = interp1
-    results.gx=gx
+    if(plot):
+      results.interp1 = interp1
+      results.gx=gx
     return results
     
 

@@ -55,4 +55,52 @@ def makeGmshMesh(boxRad,sphereRad,res):
   return xml
 
 
-xmlName = makeGmshMesh(boxRad,sphereRad,res)
+import sys
+#
+# Revisions
+#       10.08.10 inception
+#
+
+def doit(fileIn):
+  xmlName = makeGmshMesh(boxRad,sphereRad,res)
+  1
+
+if __name__ == "__main__":
+  import sys
+  scriptName= sys.argv[0]
+  msg="""
+Purpose: 
+ 
+Usage:
+"""
+  msg+="  %s -validation" % (scriptName)
+  msg+="""
+  
+ 
+Notes:
+
+"""
+  remap = "none"
+
+  if len(sys.argv) < 2:
+      raise RuntimeError(msg)
+
+  fileIn= sys.argv[1]
+  if(len(sys.argv)==3):
+    print "arg"
+
+  for i,arg in enumerate(sys.argv):
+    if(arg=="-validation"):
+      arg1=sys.argv[i+1] 
+      doit(fileIn)
+  
+
+
+
+
+
+  raise RuntimeError("Arguments not understood")
+
+
+
+
