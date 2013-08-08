@@ -1,6 +1,6 @@
 import sys 
 import matplotlib.pylab as plt
-sys.path.append("/net/home/huskeypm/Sources/homogenization/")
+#sys.path.append("/net/home/huskeypm/Sources/homogenization/")
 import homoglight as hl
 import numpy as np
 
@@ -14,7 +14,7 @@ class Omega1(SubDomain):
       return True
 
 # Create mesh and define function space
-def testCase(filename="none",mode="cylinder",qSubstrate=1.,dim=3):
+def testCase(filename="none",mode="cylinder",qSubstrate=1.,dim=3,qenz=-3):
 
   # Create mesh and define function space
   mesh = Mesh(filename)
@@ -34,10 +34,10 @@ def testCase(filename="none",mode="cylinder",qSubstrate=1.,dim=3):
   #File("subdomain.xml.gz") << subdomains
 
   # potential # KIND OF DEBYEHUCKEL LIKE< BUT NOT CORRCT 
-  qenz = -1. 
-    
-  qenz = qSubstrate
-  qSubstrate = -1  
+  #qenz = -1. 
+  #  
+  #qenz = qSubstrate
+  #qSubstrate = -1  
     
   if(mode=="cylinder"):  
     expr = Expression("qenz*prefac*exp(-1*sqrt(x[0]*x[0]+x[1]*x[1])/w)",prefac=3,qenz=qenz,w=10)
@@ -48,8 +48,10 @@ def testCase(filename="none",mode="cylinder",qSubstrate=1.,dim=3):
     
   import numpy as np
   ar =   np.asarray(psi.vector()[:])
-  print "Fake min/max %f/%f " % (np.min(ar),np.max(ar))
-  psi.vector()[:] *= 0.593 # kT
+  print "Fake psi min/max %f/%f [mV]" % (np.min(ar),np.max(ar))
+  psi.vector()[:] *= (1/25.) *0.593 # 1/RT [mV] * kT 
+  ar =   np.asarray(psi.vector()[:])
+  print "Fake pmf min/max %f/%f [mV]" % (np.min(ar),np.max(ar))
   File("psi.pvd") << psi
 
     
@@ -93,6 +95,14 @@ def doit():
   plt.legend(loc=0)
 
   plt.gcf().savefig("sphere_vs_cylinder.png")  
+
+def test():
+  fileIn="/net/home/huskeypm/Sources/homogenization/example/volfracs/volFrac_0.10_mesh.xml.gz"
+  fileIn="/home/huskeypm/sources/homogenization/example/volfracs/volFrac_0.10_mesh.xml.gz"
+  q=1
+  #q=0
+  q=-1
+  resultsSphere = testCase(fileIn,mode="sphere",qSubstrate=q)
     
 
 #sphere
@@ -121,8 +131,7 @@ if __name__ == "__main__":
 
     if(arg=="-run"):
       doit()
+ 
+    if(arg=="-test"):
+     test()
 
-if(0):
-  fileIn="/net/home/huskeypm/Sources/homogenization/example/volfracs/volFrac_0.10_mesh.xml.gz"
-  q=-1
-  resultsSphere = testCase(fileIn,mode="sphere",qSubstrate=q)

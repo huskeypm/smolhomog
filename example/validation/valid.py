@@ -27,7 +27,7 @@ parms = pb.parms
 parms.res =3       
 m_to_A = 1e10
  
-parms.z = -1.  # lig charge    [Chloride]
+parms.zLig = -1.  # lig charge    [Chloride]
     
 #F=96485.3365 # Faradays constant [C/mol]
 #R = 8.3143   # Gas const [J/mol K] 
@@ -233,6 +233,7 @@ def runCase(engine="testing"):
     print "boundaryPotential ", boundaryPotential
     # potential is mV 
     (V,potential)= pb.SolvePoissonBoltzmann(mesh,boundaryPotential=boundaryPotential)
+    ar = np.asarray(potential.vector()); print "min/max %f/%f" %(np.min(ar),np.max(ar)) 
     
     #(gy,interp) = interp2d(mesh,potential)
     #plt.figure()
@@ -247,16 +248,19 @@ def runCase(engine="testing"):
     
     # multiply potential [mV] by F/RT [1/mV] s.t. potential is unitless 
     unitlessPotential = Function(V)
-    unitlessPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:] 
+    #unitlessPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:] 
+    unitlessPotential.vector()[:] = parms.zLig*parms.F_o_RT*potential.vector()[:] 
+    ar = np.asarray(unitlessPotential.vector()); print "min/max %f/%f" %(np.min(ar),np.max(ar)) 
     
     parms.update()
     if(engine=="testing"):
       results = test.doit(mode="hack2",discontinuous=False,dim=2,fileIn=fileIn,potential=unitlessPotential)
     elif(engine=="homog.py"):
       scaledPotential = Function(V)  
-      scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
+      #scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
+      scaledPotential.vector()[:] = parms.F_o_RT*potential.vector()[:]  
       scaledPotential.vector()[:] = parms.kT * scaledPotential.vector()[:]  # (z=+,psi=+) --> V
-      results = hl.runHomog(fileXML=fileIn,psi=scaledPotential,q=1,smolMode=True)
+      results = hl.runHomog(fileXML=fileIn,psi=scaledPotential,q=parms.zLig,smolMode=True)
       results.Ds =results.d_eff 
     
     return results 
@@ -378,7 +382,7 @@ def validation(runSeveral=True):
     ## using 'runCase'
     results = runCase() 
     Drun1 = results.Ds[0]
-    print "runCase:sigma %f z %f D %f " %(sigma,parms.z,Drun1)
+    print "runCase:sigma %f z %f D %f " %(sigma,parms.zLig,Drun1)
 
     assert(np.abs(results.Ds[0] - Ds130813[i])<0.01), "Validation case FAILED! Do not commit!!"
     print "Success!"
@@ -389,7 +393,7 @@ def validation(runSeveral=True):
     # then multiply by -kT and assume that 'q=1' (since already included in Fz/RT term)
     results2 = runCase(engine="homog.py")
     Drun2 = results2.Ds[0]
-    print "homog: sigma %f z %f D %f " %(sigma,parms.z,Drun2)
+    print "homog: sigma %f z %f D %f " %(sigma,parms.zLig,Drun2)
 
     assert(np.abs(Drun1-Drun2)<0.001)
 
@@ -416,7 +420,7 @@ def test1():
     Ds[i] = results.Ds[0]
 
   plt.figure()
-  plt.plot(sigmas,Ds,'b',label="z=%3.1f"%parms.z)           
+  plt.plot(sigmas,Ds,'b',label="z=%3.1f"%parms.zLig)           
   plt.xlabel("$\sigma$ $[C/m^2]$")
   plt.ylabel("D")
   plt.legend(loc=0)
@@ -470,6 +474,13 @@ Notes:
   for i,arg in enumerate(sys.argv):
     if(arg=="-validation"): 
       validation()
+    if(arg=="-doAll"): 
+      #fig3()
+      #fig7()
+      #fig7Murad()
+      #fig8()
+      fig9()
+      quit()
 
     if(arg=="-fig3"):
       fig3()
