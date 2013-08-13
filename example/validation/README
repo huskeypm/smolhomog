@@ -1,9 +1,4 @@
-Goal here is to validate implementation against Murad and Bourbatache papers
+To validate single 2D case
 
-1. Determine ESP 
-2. computed eff. diff for positive/negative ions 
+python valid.py -validation 
 
-
-Case 
-1. slab geom 
-2. pore geom 

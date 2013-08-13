@@ -13,6 +13,7 @@ import poissonboltzmann as pb
 #
 # Still in development 
 #
+debug = 0
 from dolfin import *
 import matplotlib.pyplot as plt
 import sys
@@ -183,10 +184,12 @@ def fig3():
   #plt.gca().invert_yaxis()
   plt.gcf().savefig("fig3valid.png")
 
+
+# for validated PB eqn on mesh 
 def fig7():   
     #res = 10 # min res for cb=86, sigma = 0.0185
-    parms.molRad=20; # 0.3 e-8
-    parms.domRad=50; # 0.5e-8 m
+    parms.molRad=30; # 0.3 e-8 ==> A
+    parms.domRad=50; # 0.5e-8 m ==> 
     fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res) 
  
     cb=86e-3; sigma = -0.0185; # for comparing against Fig 7 ESP 
@@ -246,15 +249,20 @@ def runCase():
 # for validating against fig 9 of bourbatache 
 def fig9ops():
   # all cases 
-  parms.res = 10 # quick 
-  parms.res=0.5   
+  if(debug):
+    parms.res = 10 # quick 
+    nSigma = 2 
+    nMolRads = 3; # 8  
+  
+  else: 
+    parms.res=0.5   
+    nSigma = 7 ## DO NOT CHANGE ME SINCE LABELS ARE HARD CODED  
+    nMolRads = 8; # 8  
   
   parms.domRad=0.5e-8 * m_to_A # A 
   sigmas = -1*np.array([0,0.01,0.05,0.1, 0.15]) # [C/m^2]
   #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
-  nSigma = 7 ## DO NOT CHANGE ME SINCE LABELS ARE HARD CODED  
   sigmas = np.linspace(-0.15,0.15,nSigma)       
-  nMolRads = 8; # 8  
   molRads = np.linspace(parms.domRad*0.01,parms.domRad*0.9,nMolRads)
   cb = 500 * 1e-3 # mol/m^3 --> M  
   parms.ionC = cb
@@ -338,6 +346,21 @@ def fig8():
 #test2()
 
 
+# basically a unit test for a single case 
+def validation():
+  parms.res=1
+  parms.domRad=0.5e-8 * m_to_A # A 
+  cb = 86 * 1e-3 # mol/m^3 --> M  
+  #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
+  parms.molRad = 0.4e-8*m_to_A
+  parms.ionC = cb
+  parms.sigma = -0.07 # C/m^2
+  results = runCase() 
+  print results.Ds[0]
+  assert(np.abs(results.Ds[0] - 0.1312)<0.001), "Validation case FAILED! Do not commit!!"
+  print "Success!"
+
+
 
 
 
@@ -376,6 +399,9 @@ Notes:
     print "arg"
 
   for i,arg in enumerate(sys.argv):
+    if(arg=="-validation"): 
+      validation()
+
     if(arg=="-fig3"):
       fig3()
     if(arg=="-fig7"):
@@ -386,5 +412,7 @@ Notes:
       fig8()
     if(arg=="-fig9"):
       fig9()
+    if(arg=="-debug"): 
+      debug=1
 
 
