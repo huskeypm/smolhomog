@@ -5,8 +5,11 @@ sys.path.append("/home/huskeypm/sources/modified-pb/example")
 sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
 sys.path.append("/net/home/huskeypm/Sources/smolhomog/example/noobstacle/")
 sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
+sys.path.append("/net/home/huskeypm/Sources/homogenization/")
+sys.path.append("/net/home/huskeypm/Sources/smolfin/")           
 import matplotlib.gridspec as gridspec
-import testing as test
+import noobstacle as test
+import homoglight as hl
 
 import poissonboltzmann as pb
 
@@ -24,14 +27,14 @@ parms = pb.parms
 parms.res =3       
 m_to_A = 1e10
  
-z = -1.  # lig charge    [Chloride]
+parms.z = -1.  # lig charge    [Chloride]
     
-F=96485.3365 # Faradays constant [C/mol]
-R = 8.3143   # Gas const [J/mol K] 
-T = 298.     # Temp [K] 
-RT_o_F=(R*T)/F*1e3  # [mV]   
-print RT_o_F
-Fz_o_RT=z/RT_o_F     # [1/mV] 
+#F=96485.3365 # Faradays constant [C/mol]
+#R = 8.3143   # Gas const [J/mol K] 
+#T = 298.     # Temp [K] 
+#RT_o_F=(R*T)/F*1e3  # [mV]   
+#print RT_o_F
+#Fz_o_RT=z/RT_o_F     # [1/mV] 
 
 import buildMesh   
 
@@ -218,8 +221,11 @@ def fig7():
   #might also compare w Fig 7 of Murad, but should probably suffice to show opposite
   #tends noted for D- vs D+ [actually, they aren't opposites, so look closer]  
 
-def runCase():     
-    fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res)          
+def runCase(engine="testing"):     
+    if(debug):
+      fileIn = "cylinderTmp.xml"
+    else:
+      fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res)          
     mesh = Mesh(fileIn)
     
     # get electro potential (OVERRIDING) 
@@ -241,9 +247,18 @@ def runCase():
     
     # multiply potential [mV] by F/RT [1/mV] s.t. potential is unitless 
     unitlessPotential = Function(V)
-    unitlessPotential.vector()[:] = Fz_o_RT*potential.vector()[:] 
+    unitlessPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:] 
     
-    results = test.doit(mode="hack2",discontinuous=False,dim=2,fileIn=fileIn,potential=unitlessPotential)
+    parms.update()
+    if(engine=="testing"):
+      results = test.doit(mode="hack2",discontinuous=False,dim=2,fileIn=fileIn,potential=unitlessPotential)
+    elif(engine=="homog.py"):
+      scaledPotential = Function(V)  
+      scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
+      scaledPotential.vector()[:] = parms.kT * scaledPotential.vector()[:]  # (z=+,psi=+) --> V
+      results = hl.runHomog(fileXML=fileIn,psi=scaledPotential,q=1,smolMode=True)
+      results.Ds =results.d_eff 
+    
     return results 
 
 # for validating against fig 9 of bourbatache 
@@ -347,18 +362,77 @@ def fig8():
 
 
 # basically a unit test for a single case 
-def validation():
-  parms.res=1
+def validation(runSeveral=True):
+  parms.res=0.5
   parms.domRad=0.5e-8 * m_to_A # A 
   cb = 86 * 1e-3 # mol/m^3 --> M  
   #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
   parms.molRad = 0.4e-8*m_to_A
   parms.ionC = cb
-  parms.sigma = -0.07 # C/m^2
-  results = runCase() 
-  print results.Ds[0]
-  assert(np.abs(results.Ds[0] - 0.1312)<0.001), "Validation case FAILED! Do not commit!!"
-  print "Success!"
+
+  sigmas = np.array([ 0.07,0.,-0.07]) # C/m^2
+  Ds130813 = np.array([1.3284,0.3221,0.1310])
+  for i,sigma in enumerate(sigmas):
+    parms.sigma = sigma # C/m^2
+
+    ## using 'runCase'
+    results = runCase() 
+    Drun1 = results.Ds[0]
+    print "runCase:sigma %f z %f D %f " %(sigma,parms.z,Drun1)
+
+    assert(np.abs(results.Ds[0] - Ds130813[i])<0.01), "Validation case FAILED! Do not commit!!"
+    print "Success!"
+
+    ## using original Homog code 
+    # smol.ElectrostaticsPMF expects to multiply psi*q/kT  
+    # so we first multiply potential [mV] by F/RT [1/mV] s.t. potential is unitless 
+    # then multiply by -kT and assume that 'q=1' (since already included in Fz/RT term)
+    results2 = runCase(engine="homog.py")
+    Drun2 = results2.Ds[0]
+    print "homog: sigma %f z %f D %f " %(sigma,parms.z,Drun2)
+
+    assert(np.abs(Drun1-Drun2)<0.001)
+
+
+def test1():
+  parms.res=1
+  parms.domRad=21.7 # A            
+  cb = 86 * 1e-3 # mol/m^3 --> M  
+  #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
+  sigmas =np.linspace(0.1,-0.1,9)
+  parms.molRad = 0.4e-8*m_to_A
+  parms.ionC = cb
+
+  nSigma = np.shape(sigmas)[0]
+  Ds = np.zeros(nSigma)
+  for i, sigma in enumerate(sigmas):
+    parms.sigma = sigma
+    results = runCase(engine="homog.py")
+    Ds[i] = results.Ds[0]
+
+  print Ds
+  idx=np.where(sigmas>=0)
+  Dps=Ds[idx]
+  sps=sigmas[idx]
+
+  idx=np.where(sigmas<=0)
+  Dms=Ds[idx]
+  sms =np.abs(sigmas[idx])
+
+  plt.figure()
+  plt.plot(sms,Dms,'b',label="$\sigma< 0$")
+  plt.plot(sps,Dps,'r',label="$\sigma> 0$")
+  plt.xlabel("$|\sigma|$ $[C/m^2]$")
+  plt.ylabel("D")
+  plt.legend(loc=0)
+  plt.grid(True)
+  plt.gcf().savefig("fig8valid.png")
+
+
+
+  
+
+  
 
 
 
@@ -414,5 +488,7 @@ Notes:
       fig9()
     if(arg=="-debug"): 
       debug=1
+    if(arg=="-test"):
+      runTest1()
 
 
