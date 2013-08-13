@@ -119,4 +119,10 @@ if __name__ == "__main__":
     if(arg=="-gamer"):
       dolf=0
 
-  doit()
+    if(arg=="-run"):
+      doit()
+
+if(0):
+  fileIn="/net/home/huskeypm/Sources/homogenization/example/volfracs/volFrac_0.10_mesh.xml.gz"
+  q=-1
+  resultsSphere = testCase(fileIn,mode="sphere",qSubstrate=q)
