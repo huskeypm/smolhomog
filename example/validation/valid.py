@@ -395,12 +395,17 @@ def validation(runSeveral=True):
 
 
 def test1():
-  parms.res=1
+  parms.res=0.2
   parms.domRad=21.7 # A            
-  cb = 86 * 1e-3 # mol/m^3 --> M  
+  parms.molRad = 12.0 # A           
+
+  #parms.res=2.0 
+  #parms.domRad=217 # A            
+  #parms.molRad = 120 # A           
+
+  cb = 0.15 # [M]                       
   #sigmas = np.array([-0.07, -0.05,  -0.001 ]) 
-  sigmas =np.linspace(0.1,-0.1,9)
-  parms.molRad = 0.4e-8*m_to_A
+  sigmas =np.linspace(0.1,-0.1,3)
   parms.ionC = cb
 
   nSigma = np.shape(sigmas)[0]
@@ -410,23 +415,13 @@ def test1():
     results = runCase(engine="homog.py")
     Ds[i] = results.Ds[0]
 
-  print Ds
-  idx=np.where(sigmas>=0)
-  Dps=Ds[idx]
-  sps=sigmas[idx]
-
-  idx=np.where(sigmas<=0)
-  Dms=Ds[idx]
-  sms =np.abs(sigmas[idx])
-
   plt.figure()
-  plt.plot(sms,Dms,'b',label="$\sigma< 0$")
-  plt.plot(sps,Dps,'r',label="$\sigma> 0$")
-  plt.xlabel("$|\sigma|$ $[C/m^2]$")
+  plt.plot(sigmas,Ds,'b',label="z=%3.1f"%parms.z)           
+  plt.xlabel("$\sigma$ $[C/m^2]$")
   plt.ylabel("D")
   plt.legend(loc=0)
   plt.grid(True)
-  plt.gcf().savefig("fig8valid.png")
+  plt.gcf().savefig("test1.png")
 
 
 
@@ -488,7 +483,7 @@ Notes:
       fig9()
     if(arg=="-debug"): 
       debug=1
-    if(arg=="-test"):
-      runTest1()
+    if(arg=="-test1"):
+      test1()
 
 

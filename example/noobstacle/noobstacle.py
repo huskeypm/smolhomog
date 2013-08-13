@@ -169,16 +169,16 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
           plt.title("pmf") 
         else:
           print "Using imported grid" 
-          pmf = Function(FunctionSpace(mesh,"CG",1))
-          print np.shape(pmf.vector()[:] )
+          pmfFactor = Function(FunctionSpace(mesh,"CG",1))
+          print np.shape(pmfFactor.vector()[:] )
           print np.shape(potential.vector()[:] )
           # Higher (less favorable) potentials reduce np.exp toward 0
           # MUST have unitless potential here (e.g. already divided by kT) 
-          pmf.vector()[:] = np.exp(-1*potential.vector()[:]) 
-          ar = np.array(pmf.vector()[:])
+          pmfFactor.vector()[:] = np.exp(-1*potential.vector()[:]) 
+          ar = np.array(pmfFactor.vector()[:])
           print "Exp(-p) min %f" % (np.min(ar))
           print "Exp(-p) max %f" % (np.max(ar))
-          k = pmf  
+          k = pmfFactor  
     
     
     #plot(subdomains, title='subdomains')
@@ -221,8 +221,15 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     u = Function(V)
     solve(a == L, u, bcs)
     File("out.pvd") << u
-    z = project(k*u,V)
-    File("wrong.pvd") << z
+
+    ## DEBUG 
+    Vs = FunctionSpace(mesh,"CG",1)
+    up = project(u[0],V=Vs)    
+    ar=np.asarray(up.vector())
+    print "Noobs ", np.min(ar)
+    print "Noobs ", np.max(ar)
+    #z = project(k*u,V)
+    #File("wrong.pvd") << z
     
     ## Show chi solution  
     if(plot): 
@@ -350,6 +357,7 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
         print "WARNING: double check that pmf should be applied to delta"
         form = grad_Xi_component * dx(markerFree) + grad_Xi_component*dx(markerObstacle)  
         integrand = assemble(form)
+        print "integrand %d %f" %(i,integrand)
         omegas[i] = integrand
     
     ## Compare diff const. with analytical bounds (2D) 
