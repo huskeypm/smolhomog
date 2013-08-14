@@ -1,4 +1,15 @@
-# -*- coding: utf-8 -*-
+
+import numpy as np
+import matplotlib.pylab as plt
+from dolfin import *
+
+mesh = Mesh("p_mesh.xml.gz")
+
+# <codecell>
+
+np.max(mesh.coordinates())
+
+
 
 import poissonboltzmann as pb
 from dolfin import *
@@ -7,16 +18,17 @@ import numpy as np
 import homoglight as hl
 
 print "WARNING: bounds are hardcoded"
-mins=np.zeros(2)
-maxs=np.array([547.8,316.272])
+mins=np.array([-50,-50,-50])
+maxs=np.array([50,50,50])
 
 # <codecell>
 
 # Define Dirichlet boundary (x = 0 or x = 1)
 tol = 0.6
-def isInner(x,y,mins=np.array([0,0]),maxs=np.array([1,1])):
+def isInner(x,y,z,mins=np.array([0,0,0]),maxs=np.array([1,1,1])):
   if(x>mins[0]+tol and x<maxs[0]-tol and\
-     y>mins[1]+tol and y<maxs[1]-tol\
+     y>mins[1]+tol and y<maxs[1]-tol and\
+     z>mins[2]+tol and z<maxs[2]-tol
      ):
         return True
 
@@ -26,13 +38,13 @@ def isInner(x,y,mins=np.array([0,0]),maxs=np.array([1,1])):
 
 class leftBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    outer  = isInner(x[0],x[1],mins,maxs)
+    outer  = isInner(x[0],x[1],x[2],mins,maxs)
     return outer and on_boundary
 
 # Define Dirichlet boundary (x = 0 or x = 1)
 class elseBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    outer  = isInner(x[0],x[1],mins,maxs)
+    outer  = isInner(x[0],x[1],x[2],mins,maxs)
     if(outer):
         return False
     return on_boundary
@@ -40,7 +52,7 @@ class elseBoundary(SubDomain):
 
 def runCase(ionC=0.15):
     # load mesh 
-    meshFile = "0.xml"
+    meshFile = "p_mesh.xml.gz"
     mesh = Mesh(meshFile)
     
     
@@ -60,7 +72,7 @@ def runCase(ionC=0.15):
     
     # Mark BCs 
     V = FunctionSpace(mesh,"CG",1)
-    dim=2
+    dim=3
     subdomains = MeshFunction("uint",mesh,dim-1)
     boundary = leftBoundary(); 
     boundary.min=mins;boundary.max=maxs
@@ -153,5 +165,7 @@ Notes:
   for i,arg in enumerate(sys.argv):
     if(arg=="-validation"):
       doit()
+
+# <codecell>
 
 
