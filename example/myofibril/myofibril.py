@@ -1,4 +1,6 @@
-# -*- coding: utf-8 -*-
+
+import sys 
+sys.path.append("/net/home/huskeypm/Sources/modified-pb/example/")
 
 import poissonboltzmann as pb
 from dolfin import *
@@ -7,33 +9,51 @@ import numpy as np
 import homoglight as hl
 
 print "WARNING: bounds are hardcoded"
-mins=np.zeros(2)
-maxs=np.array([547.8,316.272])
+dims = 2
 
-
-# <codecell>
 
 # Define Dirichlet boundary (x = 0 or x = 1)
-tol = 0.6
-def isOuter(x,y,mins=np.array([0,0]),maxs=np.array([1,1])):
-  if(x>mins[0]+tol and x<maxs[0]-tol and\
-     y>mins[1]+tol and y<maxs[1]-tol\
-     ):
-        return True
+class BcThang():
+  def __init__(self,dims=2,tol=10):
+    self.dims = dims
+    self.tol = tol
+    self.mins=np.zeros(dims)
+    self.maxs=np.array([547.8,316.272])
 
-  return False            
+  def isOuter(self,x,y,z=0):
+    outerXY =  ((x>self.maxs[0]-self.tol or x<self.mins[0]+self.tol) or\
+                (y>self.maxs[1]-self.tol or y<self.mins[1]+self.tol)) 
+    
+    outerZ = True
+
+    if dims==3:
+      outerZ =  (z>self.maxs[2]-self.tol or  z<self.mins[2]+self.tol)
+
+    if(outerZ and outerXY):
+      #print "TRUE ", x,y
+      #quit()
+      return True
+
+    #print "False ", x,y
+    return False            
             
+
+bcThang = BcThang()
                                                     
 
 class outerBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    outer  = isOuter(x[0],x[1],mins,maxs)
+    outer  = bcThang.isOuter(x[0],x[1]) # ,mins,maxs)
+
+    #if(outer==False and on_boundary==True): 
+    #  print "sdfsdf"
+    #  quit()
     return outer and on_boundary
 
 # Define Dirichlet boundary (x = 0 or x = 1)
 class innerBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    outer  = isOuter(x[0],x[1],mins,maxs)
+    outer  = bcThang.isOuter(x[0],x[1]) # ,mins,maxs)
     if(outer):
         return False
     return on_boundary
@@ -41,15 +61,17 @@ class innerBoundary(SubDomain):
 
 # sigma [C/m^2]
 # ionC  [M] 
-def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01):
+def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False):
     # load mesh 
     mesh = Mesh(meshFile)
     
     
     #dims
-    mins=np.min(mesh.coordinates(),axis=0)
-    maxs=np.max(mesh.coordinates(),axis=0)
-    print maxs
+    bcThang.mins=np.min(mesh.coordinates(),axis=0)
+    bcThang.maxs=np.max(mesh.coordinates(),axis=0)
+
+    #bcThang.mins=np.array([240.8,240.272])
+    #bcThang.maxs=np.array([250.8,250.272])
 
     # env/system info
     parms = pb.parms
@@ -61,31 +83,35 @@ def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01):
     
     # Mark BCs 
     V = FunctionSpace(mesh,"CG",1)
-    dim=2
-    subdomains = MeshFunction("uint",mesh,dim-1)
+    subdomains = MeshFunction("uint",mesh,dims-1)
     boundary = outerBoundary(); 
-    print "WARNING: I dond't think min/max being used"
-    boundary.min=mins;boundary.max=maxs
+    #print "WARNING: I dond't think min/max being used"
+    #boundary.min=mins;boundary.max=maxs
     outerMarker = 2
     boundary.mark(subdomains,outerMarker)
     boundary = innerBoundary()
-    boundary.min=mins;boundary.max=maxs
+    #boundary.min=mins;boundary.max=maxs
     innerMarker = 3
     boundary.mark(subdomains,innerMarker)
     #NOT USING ANY NEUMANN COND ds = Measure("ds")[subdomains]
     
     bcs=[]    
     f = Constant(boundaryPotential)    
-    bcs.append(DirichletBC(V, f, subdomains,outerMarker))    
+    bcs.append(DirichletBC(V, f, subdomains,innerMarker))    
+    #bcs.append(DirichletBC(V, f, subdomains,outerMarker))    
     #import view
     #view.PrintBoundary(mesh,bcs)
+    #quit()
 
     ## Solve PB eqn 
     (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs)
     File("psi.pvd") << potential
     scaledPotential = Function(V)
  
-    zLigs = np.array([-2,-1,0,1,2])
+    if(singleCase):
+      zLigs = np.array([-1]) 
+    else: 
+      zLigs = np.array([-2,-1,0,1,2])
     Ds = np.zeros(np.shape(zLigs)[0])
     for i,zLig in enumerate(zLigs):
       parms.zLig = zLig
@@ -154,6 +180,8 @@ Notes:
 
   for i,arg in enumerate(sys.argv):
     if(arg=="-validation"):
+      runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=True)   
+    if(arg=="-run"):
       doit()
 
 
