@@ -10,6 +10,7 @@ print "WARNING: bounds are hardcoded"
 mins=np.zeros(2)
 maxs=np.array([547.8,316.272])
 
+
 # <codecell>
 
 # Define Dirichlet boundary (x = 0 or x = 1)
@@ -38,9 +39,10 @@ class innerBoundary(SubDomain):
     return on_boundary
 
 
-def runCase(ionC=0.15):
+# sigma [C/m^2]
+# ionC  [M] 
+def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01):
     # load mesh 
-    meshFile = "0.xml"
     mesh = Mesh(meshFile)
     
     
@@ -51,7 +53,6 @@ def runCase(ionC=0.15):
 
     # env/system info
     parms = pb.parms
-    sigma = -0.01 # C/m^2
     parms.ionC = ionC # M 
     boundaryPotential = pb.Grahame(sigma,parms.ionC)
     print boundaryPotential
@@ -63,18 +64,19 @@ def runCase(ionC=0.15):
     dim=2
     subdomains = MeshFunction("uint",mesh,dim-1)
     boundary = outerBoundary(); 
+    print "WARNING: I dond't think min/max being used"
     boundary.min=mins;boundary.max=maxs
-    leftmarker = 2
-    boundary.mark(subdomains,leftmarker)
+    outerMarker = 2
+    boundary.mark(subdomains,outerMarker)
     boundary = innerBoundary()
     boundary.min=mins;boundary.max=maxs
-    elsemarker = 3
-    boundary.mark(subdomains,elsemarker)
+    innerMarker = 3
+    boundary.mark(subdomains,innerMarker)
     #NOT USING ANY NEUMANN COND ds = Measure("ds")[subdomains]
     
     bcs=[]    
     f = Constant(boundaryPotential)    
-    bcs.append(DirichletBC(V, f, subdomains,leftmarker))    
+    bcs.append(DirichletBC(V, f, subdomains,outerMarker))    
     #import view
     #view.PrintBoundary(mesh,bcs)
 

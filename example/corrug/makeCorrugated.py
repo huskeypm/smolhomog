@@ -1,11 +1,12 @@
 import numpy as np
 # Cretates 'currogated' mesh for inestigating slower diffusion 
   
+nm_to_Ang = 10.
 def doit(outName):
-  nRidges = 10
-  periodRidge = 1.
-  heightRidge = 1.25
-  layerHeight = 4.
+  nRidges = 20
+  periodRidge = 0.4 * nm_to_Ang
+  heightRidge = 0.75 * nm_to_Ang
+  layerHeight = 2. * nm_to_Ang
   res = layerHeight/30.
   
   ## define  'ridge' positions on base layer 
