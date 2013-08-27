@@ -14,7 +14,7 @@ maxs=np.array([547.8,316.272])
 
 # Define Dirichlet boundary (x = 0 or x = 1)
 tol = 0.6
-def isInner(x,y,mins=np.array([0,0]),maxs=np.array([1,1])):
+def isOuter(x,y,mins=np.array([0,0]),maxs=np.array([1,1])):
   if(x>mins[0]+tol and x<maxs[0]-tol and\
      y>mins[1]+tol and y<maxs[1]-tol\
      ):
@@ -24,15 +24,15 @@ def isInner(x,y,mins=np.array([0,0]),maxs=np.array([1,1])):
             
                                                     
 
-class leftBoundary(SubDomain):
+class outerBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    outer  = isInner(x[0],x[1],mins,maxs)
+    outer  = isOuter(x[0],x[1],mins,maxs)
     return outer and on_boundary
 
 # Define Dirichlet boundary (x = 0 or x = 1)
-class elseBoundary(SubDomain):
+class innerBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    outer  = isInner(x[0],x[1],mins,maxs)
+    outer  = isOuter(x[0],x[1],mins,maxs)
     if(outer):
         return False
     return on_boundary
@@ -62,11 +62,11 @@ def runCase(ionC=0.15):
     V = FunctionSpace(mesh,"CG",1)
     dim=2
     subdomains = MeshFunction("uint",mesh,dim-1)
-    boundary = leftBoundary(); 
+    boundary = outerBoundary(); 
     boundary.min=mins;boundary.max=maxs
     leftmarker = 2
     boundary.mark(subdomains,leftmarker)
-    boundary = elseBoundary()
+    boundary = innerBoundary()
     boundary.min=mins;boundary.max=maxs
     elsemarker = 3
     boundary.mark(subdomains,elsemarker)
