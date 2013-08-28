@@ -59,9 +59,12 @@ class innerBoundary(SubDomain):
     return on_boundary
 
 
+
 # sigma [C/m^2]
 # ionC  [M] 
-def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False):
+#  
+# pass in boundary class where you want charge applied
+def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False, chargeBoundary=innerBoundary):
     # load mesh 
     mesh = Mesh(meshFile)
     
@@ -84,24 +87,17 @@ def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False):
     # Mark BCs 
     V = FunctionSpace(mesh,"CG",1)
     subdomains = MeshFunction("uint",mesh,dims-1)
-    boundary = outerBoundary(); 
-    #print "WARNING: I dond't think min/max being used"
-    #boundary.min=mins;boundary.max=maxs
-    outerMarker = 2
-    boundary.mark(subdomains,outerMarker)
-    boundary = innerBoundary()
-    #boundary.min=mins;boundary.max=maxs
-    innerMarker = 3
-    boundary.mark(subdomains,innerMarker)
+    boundary = chargeBoundary(); 
+    chargeMarker = 2
+    boundary.mark(subdomains,chargeMarker)
+    #boundary = innerBoundary()
+    #innerMarker = 3
+    #boundary.mark(subdomains,innerMarker)
     #NOT USING ANY NEUMANN COND ds = Measure("ds")[subdomains]
     
     bcs=[]    
     f = Constant(boundaryPotential)    
-    bcs.append(DirichletBC(V, f, subdomains,innerMarker))    
-    #bcs.append(DirichletBC(V, f, subdomains,outerMarker))    
-    #import view
-    #view.PrintBoundary(mesh,bcs)
-    #quit()
+    bcs.append(DirichletBC(V, f, subdomains,chargeMarker))    
 
     ## Solve PB eqn 
     (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs)
