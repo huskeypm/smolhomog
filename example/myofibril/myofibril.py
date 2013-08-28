@@ -1,12 +1,14 @@
 
 import sys 
-sys.path.append("/net/home/huskeypm/Sources/modified-pb/example/")
+#sys.path.append("/net/home/huskeypm/Sources/modified-pb/example/")
+sys.path.append("/net/home/huskeypm/Sources/smolhomog/example/")    
 
-import poissonboltzmann as pb
+#import poissonboltzmann as pb
 from dolfin import *
 import matplotlib.pylab as plt 
 import numpy as np
-import homoglight as hl
+import caseRunner as cr
+#import homoglight as hl
 
 print "WARNING: bounds are hardcoded"
 dims = 2
@@ -64,67 +66,67 @@ class innerBoundary(SubDomain):
 # ionC  [M] 
 #  
 # pass in boundary class where you want charge applied
-def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False, chargeBoundary=innerBoundary):
-    # load mesh 
-    mesh = Mesh(meshFile)
-    
-    
-    #dims
-    bcThang.mins=np.min(mesh.coordinates(),axis=0)
-    bcThang.maxs=np.max(mesh.coordinates(),axis=0)
-
-    #bcThang.mins=np.array([240.8,240.272])
-    #bcThang.maxs=np.array([250.8,250.272])
-
-    # env/system info
-    parms = pb.parms
-    parms.ionC = ionC # M 
-    boundaryPotential = pb.Grahame(sigma,parms.ionC)
-    print boundaryPotential
-    parms.update()
-    
-    
-    # Mark BCs 
-    V = FunctionSpace(mesh,"CG",1)
-    subdomains = MeshFunction("uint",mesh,dims-1)
-    boundary = chargeBoundary(); 
-    chargeMarker = 2
-    boundary.mark(subdomains,chargeMarker)
-    #boundary = innerBoundary()
-    #innerMarker = 3
-    #boundary.mark(subdomains,innerMarker)
-    #NOT USING ANY NEUMANN COND ds = Measure("ds")[subdomains]
-    
-    bcs=[]    
-    f = Constant(boundaryPotential)    
-    bcs.append(DirichletBC(V, f, subdomains,chargeMarker))    
-
-    ## Solve PB eqn 
-    (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs)
-    File("psi.pvd") << potential
-    scaledPotential = Function(V)
- 
-    if(singleCase):
-      zLigs = np.array([-1]) 
-    else: 
-      zLigs = np.array([-2,-1,0,1,2])
-    Ds = np.zeros(np.shape(zLigs)[0])
-    for i,zLig in enumerate(zLigs):
-      parms.zLig = zLig
-
-      #scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
-      scaledPotential.vector()[:] = parms.F_o_RT*potential.vector()[:]
-      scaledPotential.vector()[:] = parms.kT * scaledPotential.vector()[:]  # (z=+,psi=+) --> V
-      results = hl.runHomog(fileXML=meshFile,psi=scaledPotential,q=parms.zLig,smolMode=True)
-      Ds[i] =results.d_eff[0]
-        
-    return zLigs,Ds    
-
+## def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False, chargeBoundary=innerBoundary):
+##     # load mesh 
+##     mesh = Mesh(meshFile)
+##     
+##     
+##     #dims
+##     bcThang.mins=np.min(mesh.coordinates(),axis=0)
+##     bcThang.maxs=np.max(mesh.coordinates(),axis=0)
+## 
+##     #bcThang.mins=np.array([240.8,240.272])
+##     #bcThang.maxs=np.array([250.8,250.272])
+## 
+##     # env/system info
+##     parms = pb.parms
+##     parms.ionC = ionC # M 
+##     boundaryPotential = pb.Grahame(sigma,parms.ionC)
+##     print boundaryPotential
+##     parms.update()
+##     
+##     
+##     # Mark BCs 
+##     V = FunctionSpace(mesh,"CG",1)
+##     subdomains = MeshFunction("uint",mesh,dims-1)
+##     boundary = chargeBoundary(); 
+##     chargeMarker = 2
+##     boundary.mark(subdomains,chargeMarker)
+##     #boundary = innerBoundary()
+##     #innerMarker = 3
+##     #boundary.mark(subdomains,innerMarker)
+##     #NOT USING ANY NEUMANN COND ds = Measure("ds")[subdomains]
+##     
+##     bcs=[]    
+##     f = Constant(boundaryPotential)    
+##     bcs.append(DirichletBC(V, f, subdomains,chargeMarker))    
+## 
+##     ## Solve PB eqn 
+##     (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs)
+##     File("psi.pvd") << potential
+##     scaledPotential = Function(V)
+##  
+##     if(singleCase):
+##       zLigs = np.array([-1]) 
+##     else: 
+##       zLigs = np.array([-2,-1,0,1,2])
+##     Ds = np.zeros(np.shape(zLigs)[0])
+##     for i,zLig in enumerate(zLigs):
+##       parms.zLig = zLig
+## 
+##       #scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
+##       scaledPotential.vector()[:] = parms.F_o_RT*potential.vector()[:]
+##       scaledPotential.vector()[:] = parms.kT * scaledPotential.vector()[:]  # (z=+,psi=+) --> V
+##       results = hl.runHomog(fileXML=meshFile,psi=scaledPotential,q=parms.zLig,smolMode=True)
+##       Ds[i] =results.d_eff[0]
+##         
+##     return zLigs,Ds    
+## 
 # <codecell>
 
 def doit():
-    zLigs,Ds1p000 = runCase(ionC=1.)
-    zLigs,Ds0p150 = runCase(ionC=0.15)
+    zLigs,Ds1p000 = cr.runCase(ionC=1.,chargeBoundary=innerBoundary)
+    zLigs,Ds0p150 = cr.runCase(ionC=0.15,chargeBoundary=innerBoundary)
 
     zLigsLabs=['ATP(-2)','ADP(-1)','(0)','K(+1)',"Ca(2+)"]
     width=0.3
@@ -176,7 +178,9 @@ Notes:
 
   for i,arg in enumerate(sys.argv):
     if(arg=="-validation"):
-      runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=True)   
+      z,d = cr.runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=True,chargeBoundary=innerBoundary)   
+      assert(np.abs(d[0] - 0.67167) < 0.01), "Failed, do not check in"
+      print "PASSED!"
     if(arg=="-run"):
       doit()
 
