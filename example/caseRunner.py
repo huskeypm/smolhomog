@@ -63,52 +63,72 @@ class innerBoundary(SubDomain):
         return False
     return on_boundary
 
+def CalcPotential(mesh,ionC,sigma,chargeBoundary=innerBoundary,meshType="dolfin",f="none"):
+
+  parms = pb.parms
+  parms.ionC = ionC # M 
+  parms.update()
+  boundaryPotential = pb.Grahame(sigma,parms.ionC)
+  print boundaryPotential
+
+
+  # Mark BCs 
+  V = FunctionSpace(mesh,"CG",1)
+  subdomains = MeshFunction("uint",mesh,dims-1)
+  boundary = chargeBoundary(); 
+  chargeMarker = 2
+  boundary.mark(subdomains,chargeMarker)
+  #boundary = innerBoundary()
+  #innerMarker = 3
+  #boundary.mark(subdomains,innerMarker)
+  #NOT USING ANY NEUMANN COND ds = Measure("ds")[subdomains]
+
+  bcs=[]    
+  if(f=="none"):
+    f = Constant(boundaryPotential)    
+  bcs.append(DirichletBC(V, f, subdomains,chargeMarker))    
+  (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs,meshType=meshType)
+
+  File("psi.pvd") << potential
+
+  return potential,V
 
 
 # sigma [C/m^2]
 # ionC  [M] 
 #  
 # pass in boundary class where you want charge applied
-def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False, chargeBoundary=innerBoundary):
+# potentialFunction - for passing in a potential defined on mesh         
+def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,\
+            potential="none",chargeBoundary=innerBoundary,\
+            singleCase=False, meshType="dolfin"):
+
+    if(meshType=="dolfin"):
+      gamer = 0
+    elif(meshType=="gamer"):
+      gamer = 1
+
     # load mesh 
     mesh = Mesh(meshFile)
-    
     
     #dims
     bcThang.mins=np.min(mesh.coordinates(),axis=0)
     bcThang.maxs=np.max(mesh.coordinates(),axis=0)
+    dims = np.shape(mesh.coordinates())[1]
 
     #bcThang.mins=np.array([240.8,240.272])
     #bcThang.maxs=np.array([250.8,250.272])
 
     # env/system info
-    parms = pb.parms
-    parms.ionC = ionC # M 
-    boundaryPotential = pb.Grahame(sigma,parms.ionC)
-    print boundaryPotential
-    parms.update()
-    
-    
-    # Mark BCs 
-    V = FunctionSpace(mesh,"CG",1)
-    subdomains = MeshFunction("uint",mesh,dims-1)
-    boundary = chargeBoundary(); 
-    chargeMarker = 2
-    boundary.mark(subdomains,chargeMarker)
-    #boundary = innerBoundary()
-    #innerMarker = 3
-    #boundary.mark(subdomains,innerMarker)
-    #NOT USING ANY NEUMANN COND ds = Measure("ds")[subdomains]
-    
-    bcs=[]    
-    f = Constant(boundaryPotential)    
-    bcs.append(DirichletBC(V, f, subdomains,chargeMarker))    
-
     ## Solve PB eqn 
-    (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs)
-    File("psi.pvd") << potential
-    scaledPotential = Function(V)
+    if(potential=="none"):
+      potential,V = CalcPotential(mesh,ionC,sigma,\
+                  chargeBoundary=chargeBoundary,
+                  meshType=meshType,f="none")
+
+    scaledPotential = Function(FunctionSpace(mesh,"CG",1))
  
+    parms = pb.parms
     if(singleCase):
       zLigs = np.array([-1]) 
     else: 
@@ -120,7 +140,7 @@ def runCase(ionC=0.15,meshFile="0.xml",sigma=-0.01,singleCase=False, chargeBound
       #scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
       scaledPotential.vector()[:] = parms.F_o_RT*potential.vector()[:]
       scaledPotential.vector()[:] = parms.kT * scaledPotential.vector()[:]  # (z=+,psi=+) --> V
-      results = hl.runHomog(fileXML=meshFile,psi=scaledPotential,q=parms.zLig,smolMode=True)
+      results = hl.runHomog(fileXML=meshFile,psi=scaledPotential,q=parms.zLig,smolMode=True,gamer=gamer)
       Ds[i] =results.d_eff[0]
         
     return zLigs,Ds    

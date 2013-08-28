@@ -2,7 +2,7 @@ from dolfin import *
 import numpy as np
 import matplotlib.pylab as plt
 import sys
-sys.path.append("/home/huskeypm/sources/smolhomog/example/myofibril/")
+#sys.path.append("/home/huskeypm/sources/smolhomog/example/myofibril/")
 sys.path.append("/net/home/huskeypm/Sources/smolhomog/example/")
 
 
@@ -34,62 +34,62 @@ class innerBoundary(SubDomain):
 
 # ionC [M]
 # sigma [C/m^2]
-def runCase(meshFile,ionC=0.15,sigma=-0.01):
-    mesh = Mesh(meshFile)
-    
-    cr.mins=np.min(mesh.coordinates(),axis=0)
-    cr.maxs=np.max(mesh.coordinates(),axis=0)
-    
-    
-    V = FunctionSpace(mesh,"CG",1)
-    dim=2
-    subdomains = MeshFunction("uint",mesh,dim-1)
-    boundary = outerBoundary();
-    outerMarker = 2
-    boundary.mark(subdomains,outerMarker) 
-  
-    #f = Constant(1.)    
-    #bc = DirichletBC(V, f, subdomains,outerMarker)
-    #view = Function(V)
-    #bc.apply(view.vector())
-    #File("view.pvd") << view
-    
-    #import view
-    #view.PrintBoundary(mesh,bcs)
-    parms = pb.parms
-    parms.ionC = ionC # M 
-    boundaryPotential = pb.Grahame(sigma,parms.ionC)
-    print boundaryPotential
-    parms.update()
-
-    bcs=[]
-    f = Constant(boundaryPotential)
-    bcs.append(DirichletBC(V, f, subdomains,outerMarker))
-    
-    ## Solve PB eqn 
-    (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs)
-    File("psi2.pvd") << potential
-    scaledPotential = Function(V)
-    print "return for now" 
-    return 1,2
-    
-    zLigs = np.array([-1,0,1])
-    Ds = np.zeros(np.shape(zLigs)[0])
-    for i,zLig in enumerate(zLigs):
-      parms.zLig = zLig
-
-      #scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
-      scaledPotential.vector()[:] = parms.F_o_RT*potential.vector()[:]
-      scaledPotential.vector()[:] = parms.kT * scaledPotential.vector()[:]  # (z=+,psi=+) --> V
-      results = hl.runHomog(fileXML=meshFile,psi=scaledPotential,\
-                            reflectiveBoundary="backfront",q=parms.zLig,smolMode=True)
-      #print "y dir ", results.d_eff[1] 
-      Ds[i] =results.d_eff[0]
-        
-    return zLigs, Ds
-
-     
-
+## def runCase(meshFile,ionC=0.15,sigma=-0.01):
+##     mesh = Mesh(meshFile)
+##     
+##     cr.mins=np.min(mesh.coordinates(),axis=0)
+##     cr.maxs=np.max(mesh.coordinates(),axis=0)
+##     
+##     
+##     V = FunctionSpace(mesh,"CG",1)
+##     dim=2
+##     subdomains = MeshFunction("uint",mesh,dim-1)
+##     boundary = outerBoundary();
+##     outerMarker = 2
+##     boundary.mark(subdomains,outerMarker) 
+##   
+##     #f = Constant(1.)    
+##     #bc = DirichletBC(V, f, subdomains,outerMarker)
+##     #view = Function(V)
+##     #bc.apply(view.vector())
+##     #File("view.pvd") << view
+##     
+##     #import view
+##     #view.PrintBoundary(mesh,bcs)
+##     parms = pb.parms
+##     parms.ionC = ionC # M 
+##     boundaryPotential = pb.Grahame(sigma,parms.ionC)
+##     print boundaryPotential
+##     parms.update()
+## 
+##     bcs=[]
+##     f = Constant(boundaryPotential)
+##     bcs.append(DirichletBC(V, f, subdomains,outerMarker))
+##     
+##     ## Solve PB eqn 
+##     (V,potential)= pb.PBEngine(mesh,V,subdomains,bcs)
+##     File("psi2.pvd") << potential
+##     scaledPotential = Function(V)
+##     print "return for now" 
+##     return 1,2
+##     
+##     zLigs = np.array([-1,0,1])
+##     Ds = np.zeros(np.shape(zLigs)[0])
+##     for i,zLig in enumerate(zLigs):
+##       parms.zLig = zLig
+## 
+##       #scaledPotential.vector()[:] = parms.Fz_o_RT*potential.vector()[:]  
+##       scaledPotential.vector()[:] = parms.F_o_RT*potential.vector()[:]
+##       scaledPotential.vector()[:] = parms.kT * scaledPotential.vector()[:]  # (z=+,psi=+) --> V
+##       results = hl.runHomog(fileXML=meshFile,psi=scaledPotential,\
+##                             reflectiveBoundary="backfront",q=parms.zLig,smolMode=True)
+##       #print "y dir ", results.d_eff[1] 
+##       Ds[i] =results.d_eff[0]
+##         
+##     return zLigs, Ds
+## 
+##      
+## 
 # <codecell>
 # overwrite definition 
 #cr.outerBoundary = outerBoundary
