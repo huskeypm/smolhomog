@@ -47,9 +47,11 @@ print "WARNING: NEED TO DOUBLE CHECK THAT THIS IS THE CORRECT VDW TERM"
 print "WARNING: DLVO stuff is for LIKE charged surface, not opposite"
 print "So what i have is a hack"
 J_to_kT = 1/4.114e-21 # kT per J at 298 based on Iraelachvili
+kT_to_J = 1/J_to_kT
+
 nm_to_m = 1e-9
-R=0.1e-6; # particle diam, [m]
-A = 1e-20 # Hamaker [J]
+m_to_nm=1/nm_to_m
+#A = 1e-20 # Hamaker [J]
 #NOT NEEDED psi0=24.5 # [mV]
 #NOT NEEDED iKappa = 0.95 # [nm] in 100 mM NaCl
 #NOT NEEDED kappa = 1/iKappa
@@ -59,11 +61,17 @@ ionC = 0.1 # [M]
 iKappa =0.304/np.sqrt(ionC); kappa = 1/iKappa
 
 #Dnm= 0.25
-def DLVO(Dnm,psi0=24.5,z=1):
+# A = 1e-20 # Hamaker [J]
+# R=0.1e-6; # particle diam, [m]
+
+def DLVO(Dnm,psi0=24.5,z=1,A = 1e-20, R=0.1e-6):
   D = Dnm*nm_to_m # D [m]
   # if validating against Israelach, use 9.38e-11 and psi0/107 for T=38
   absz = np.abs(z)
-  signz=np.sign(psi0/z)  # THIS IS NOT CORRECT!!!! (sign=1 like charges, sign=-1 opposite)
+  if(z==0): 
+    signz=0.
+  else:
+    signz=np.sign(psi0/z)  # THIS IS NOT CORRECT!!!! (sign=1 like charges, sign=-1 opposite)
   Z = signz*9.22e-11 *np.tanh(absz*psi0/103)**2   # [J/m] at T = 25 C 
   W1 = 0.5*R*Z*np.exp(-kappa*Dnm)
 
@@ -91,7 +99,13 @@ vW=np.vectorize(DLVO,otypes=[float])
 # surfaces, so this is more of an illustration 
 def validateDLVO():
   Dnm = np.linspace(0.1,8,80) # [nm]
-
+  A = 1e-20 # Hamaker [J]  for vesicles (Israelachvili)
+  R=0.1e-6; # particle diam, [m]
+    
+  runDLVO(A=A,R=R,name="dlvo_valid.png")
+    
+def runDLVO(A=1e-20,R=0.1e-6,name="dlvo.png"):    
+  Dnm = np.linspace(0.1,8,80) # [nm]
   ## get sigmas from potentials so we can
   # adjust poetntial based on ionic str.
   israelsPsi0s =np.array([0,14.5,24.5,34.5])
@@ -109,9 +123,10 @@ def validateDLVO():
       psi0=pb.Grahame(sigma,ionC)
         
       if(units=="J"):   
-            vals =vW(Dnm,psi0,z)
+            vals =vW(Dnm,psi0,z,A,R)
+            
       else:
-            vals =vW(Dnm,psi0,z) * J_to_kT
+            vals =vW(Dnm,psi0,z,A,R) * J_to_kT
       ax.plot(Dnm,vals,cols[j]+styles[i],\
               label="%4.1f [mV], z=%d" %(psi0,z))
 
@@ -131,13 +146,27 @@ def validateDLVO():
   #    ax1.plot(Dnm,vW(Dnm,psi0,z)*J_to_kT,cols[j]+styles[i],\
   #            label="%4.1f [mV], z=%d" %(psi0,z))
 
-  plt.title("DLVO for particles of size 0.1 um")
+  plt.title("DLVO (R=%5.1f [nm], A=%5.1f [kT])" % (R*m_to_nm,A*J_to_kT))
   #ax.xaxis.set_ticks([1.,2.,3.,10.])
   ax.grid(True)
-  plt.gcf().savefig("dlvo_valid.png") 
+  plt.gcf().savefig(name)
 
 # <codecell>
 
+# shows difference between Israelach, and more protein-sized obstacles 
+def TestComparisons(): 
+
+  validateDLVO()
+
+  # for protein 
+  A = 5 * kT_to_J # 5 [kT] --> J
+  R = 12.5e-10 # [nm]
+  runDLVO(A=A,R=R,name="smallsphere.png")
+  plt.ylim([-2,1])
+
+  A = 0.001 * kT_to_J # 5 [kT] --> J
+  runDLVO(A=A,R=R,name="smallsphere_novdw.png")
+  plt.ylim([-2,1])
 
 # <markdowncell>
 
@@ -233,19 +262,8 @@ def ApplyDLVO(case="unitsphere",mesh="none",psi0 = 24.5,  z = 1.):
   pmf = Function(V)
   pmf.vector()[:] = ws
 
-  # plot
-  plt.figure()
-  #plt.plot(ds.vector().array(),pmf.vector().array(),'k.')
-  plt.plot(ds*nm_to_Ang,pmf.vector().array(),'k.')
-  plt.title("Interaction energy sphere w psi=%f,z=%d" % (psi0,z))
-  plt.xlabel("D from center [A]") 
-  plt.xlim([0,80])
-  plt.ylim([-40,30])
-  plt.grid(True)
-  plt.ylabel("Energy [kT]") 
-  plt.gcf().savefig("dlvotest.png") 
-  quit()
-  return pmf
+  ds*= nm_to_Ang
+  return (ds,pmf)
 
 # <markdowncell>
 
@@ -308,13 +326,30 @@ def CalcPMF(mesh,molRad,zLig,zProt,ionC=0.15, meshType="dolfin",pmfType="DebyeHu
      # get potential at 'left' edge of sphere
      psi0 = expr(molRad,0.,0.)
      print psi0
-     pmf= ApplyDLVO(case=case,mesh=mesh,psi0=psi0,z=zLig)
-     File("testpmf.pvd") << pmf
-     quit()
+     (ds,pmf)= ApplyDLVO(case=case,mesh=mesh,psi0=psi0,z=zLig)
+
+
+   # compare
+   if(1):
+     (ds,dummypmf)= ApplyDLVO(case=case,mesh=mesh) 
+     # this is a bit of a hack to get the distances from the ApplyDLVO function 
+     # plot
+     plt.figure()
+     #plt.plot(ds.vector().array(),pmf.vector().array(),'k.')
+     plt.plot(ds,pmf.vector().array(),'k.')
+     plt.title("%s interaction energy sphere w psi=%f,z=%d" % (pmfType,psi0,zLig))
+     plt.xlabel("D from center [A]") 
+     plt.xlim([0,80])
+     plt.ylim([-40,30])
+     plt.grid(True)
+     plt.ylabel("Energy [kT]") 
+     plt.gcf().savefig("pmfWRTDist.png") 
+     #File("testpmf.pvd") << pmf
+     #quit()
                 
    return pmf
             
-def call(meshPrefix,zLig,molRad,zProt,volFrac,ionC=0.15,molGamer=0,debug=0):
+def call(meshPrefix,zLig,molRad,zProt,volFrac,ionC=0.15,molGamer=0,debug=0,pmfType="DLVO"):
 #  hwe.params.z = -1
 #  hwe.pb.molRad = 12.5
 #  hwe.pb.sphericalDomainBoundary=False
@@ -326,6 +361,11 @@ def call(meshPrefix,zLig,molRad,zProt,volFrac,ionC=0.15,molGamer=0,debug=0):
   # mesh 
   meshName = meshPrefix+"_mesh.xml.gz"
   mesh = Mesh(meshName)
+
+  # recaling all meshes to be much larger, otherwise PMF is wayy too attractive
+  mesh.coordinates()[:] *= 10.
+
+
   if(debug): 
     mesh = UnitCube(20,20,20)
     cs = mesh.coordinates()[:]
@@ -337,7 +377,7 @@ def call(meshPrefix,zLig,molRad,zProt,volFrac,ionC=0.15,molGamer=0,debug=0):
   #  potential of mean force [kT] 
   #psi = CalcPMF(mesh,molRad,z,q,meshType="gamer")
   print pb.parms.zProt 
-  pmf = CalcPMF(mesh,molRad,zLig,zProt,ionC=ionC,pmfType="DLVO")
+  pmf = CalcPMF(mesh,molRad,zLig,zProt,ionC=ionC,pmfType=pmfType) 
      
   
   # double check size just in case
@@ -380,12 +420,15 @@ def validation():
   volFrac = 0.1
   zProt = -3
   molRad = 12.5 # A !! need to determine on the fly!!
+
   zLig=1
-  valuep =  call(meshPrefix,zLig,molRad,zProt,volFrac,molGamer=0)             
-  zLig=0
-  value0 =  call(meshPrefix,zLig,molRad,zProt,volFrac,molGamer=0)             
+  pmfType="DebyeHuckel"
+  pmfType="DLVO"          
+  valuep =  call(meshPrefix,zLig,molRad,zProt,volFrac,molGamer=0,pmfType=pmfType)             
+  zLig=0.
+  value0 =  call(meshPrefix,zLig,molRad,zProt,volFrac,molGamer=0,pmfType=pmfType)             
   zLig=-1
-  valuen =  call(meshPrefix,zLig,molRad,zProt,volFrac,molGamer=0)             
+  valuen =  call(meshPrefix,zLig,molRad,zProt,volFrac,molGamer=0,pmfType=pmfType)             
   #value130404=0.535335
   value130520=0.55234253        
 
@@ -410,14 +453,17 @@ def test():
   zProt =-4 # -25 mV
   zProt =-5.4  # -25 mV
   ionC = 0.1
-  debug = 1
+  debug = 0
 
   # test 
   zLig = -1
 
 
   pb.parms.zProt = zProt
-  valuep =  call(meshPrefix,zLig,molRad,zProt,volFrac,ionC=ionC,molGamer=0,debug=debug)             
+  pmfType = "DLVO" 
+  valuep = call(meshPrefix,zLig,molRad,zProt,volFrac,ionC=ionC,molGamer=0,debug=debug,pmfType=pmfType)             
+
+  print valuep
   return valuep
 
 def doit(asdf):
@@ -431,6 +477,7 @@ def doit(asdf):
   #qs = np.array([-1,0])           
   molRad = 12.5  ; print "WARNING: this is wrong!!!"
   zProt = -3
+  pmfType = "DLVO" 
   
   
   if(debug==1):
@@ -451,7 +498,7 @@ def doit(asdf):
       print "WARNING: molRads are NOT correct" 
       #molGamer = 1
       molGamer = 0
-      results[i,j] = call(meshPrefix,q,molRad,zProt,volFrac,molGamer=molGamer)
+      results[i,j] = call(meshPrefix,q,molRad,zProt,volFrac,molGamer=molGamer,pmfType=pmfType)
 
   print "WARNING: should obtain these directly from sims, not ests"
   volFracActual = 1-volFracs
@@ -524,6 +571,10 @@ Notes:
     if(arg=="-run"): 
       doit(fileIn)
       quit()  
+    if(arg=="-test1"): 
+      TestComparisons()
+      quit()  
+
 
 # <codecell>
 
