@@ -9,6 +9,7 @@ print "So what i have is a hack"
 
 import sys
 prefix = "/net/home/huskeypm/Sources/"
+prefix = "/home/huskeypm/sources/"
 sys.path.append(prefix+"/smolhomog/example/")
 sys.path.append(prefix+"/modified-pb/example/")
 sys.path.append("/net/home/huskeypm/Sources/homogenization/example/volfracs/")
@@ -32,6 +33,8 @@ nm_to_Ang = 10.
 Ang_to_m = 1e-10
 m_to_Ang = 1/Ang_to_m
 Ang_to_nm = 1e-1
+
+parms = pb.parms
 #mine
 ionC = 0.1 # [M] 
 iKappa =0.304/np.sqrt(ionC); kappa = 1/iKappa
@@ -239,10 +242,11 @@ def ApplyDLVO(case="unitsphere",mesh="none",psi0 = 24.5,  z = 1.,R=1e-7,A=1e-20)
     File("distances.pvd") << d
         
   #
-  print "WARNING: this is a bit of a debugging hack to prevent divide by zeros"
-  tol = 1e-19
+  print "WARNING: this is a bit of a debugging hack to prevent divide by zeros/exploding potential "
+  tol = 0.5e-10 *m_to_nm   
   ds[ np.where(ds < tol) ] = tol
   plt.plot(ds,np.zeros(np.shape(ds)[0]),"k.")
+  plt.ylim([-3,3])
   plt.xlabel("[nm]")
   # evaluate DLVO expression
   #ws = vW(ds.vector()[:],psi0,z)
@@ -256,6 +260,8 @@ def ApplyDLVO(case="unitsphere",mesh="none",psi0 = 24.5,  z = 1.,R=1e-7,A=1e-20)
   pmf.vector()[:] = ws
   plt.plot(ds,ws,"r.")
   plt.gcf().savefig("distances.png") 
+  #print np.sort(ds)[0:10]
+  #quit()
 
 
   ds*= nm_to_Ang
@@ -269,6 +275,7 @@ from dolfin import *
 # q - substrate charge 
 # A - Hamaker const [J] 
 # R - molRad [A] 
+
 def CalcPMF(mesh,R,zLig,zProt,ionC=0.15, meshType="dolfin",pmfType="DebyeHuckel",case="sphere",A=1e-20):
    pb.parms.zLig = zLig
    pb.parms.zProt = zProt
@@ -297,7 +304,6 @@ def CalcPMF(mesh,R,zLig,zProt,ionC=0.15, meshType="dolfin",pmfType="DebyeHuckel"
      expr = pb.DebyeHuckelExpr(dim=3)
      # get potential at 'left' edge of sphere
      psi0 = expr(R,0.,0.)
-     print psi0
      (ds,pmf)= ApplyDLVO(case=case,mesh=mesh,psi0=psi0,z=zLig,R=R*Ang_to_m,A=A)
 
 
@@ -347,7 +353,7 @@ def call(meshName,zLig,molRad,zProt,ionC=0.15,A=1e-20,molGamer=0,debug=0,pmfType
 
   #  potential of mean force [kT] 
   #psi = CalcPMF(mesh,molRad,z,q,meshType="gamer")
-  print pb.parms.zProt 
+  #print pb.parms.zProt 
   pmf = CalcPMF(mesh,molRad,zLig,zProt,A=A,ionC=ionC,pmfType=pmfType) 
      
   
@@ -452,7 +458,7 @@ def test():
     zLig=-1  
     valueM,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
 
-  if(1): 
+  if(0): 
     meshName= path+"volFrac_0.50.xml.gz" 
     # neutral 
     zLig = 0.
@@ -463,10 +469,34 @@ def test():
     A = 0.5 * kT_to_J # [J] Hamakaer
     zLig=-1  
     valueM,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+
+  if(1): 
+    meshName= path+"volFrac_0.34.xml.gz" 
+
+    valueMs=[]
+    valueNs=[]
+    As = np.arange(0.01,1.1,0.1) *kT_to_J
+    print As
+    for i,A in enumerate(As): 
+      zLig=-1  
+      valueM,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+      valueMs.append(valueM)
+
+      zLig = 0.
+      valueN,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+      valueNs.append(valueN)
+
+
+    plt.figure()
+    plt.plot(As,np.asarray(valueMs),label="-1")
+    plt.plot(As,np.asarray(valueNs),label="-1")
+    plt.gcf().savefig("range.png") 
+    
     
     
 
   print valueM,valueN,phi
+  quit()
   return valueN
 
 ## params 
@@ -548,11 +578,11 @@ def TestComparisons(A_kT=5.):
 
 
 def final(): 
-  A = 1e-20 # [J] Hamaker   
+  #A = 1e-20 # [J] Hamaker   
+  A = 0.2 * kT_to_J # Guess at Hamakar constant for small ligand with protein 
   resultsDLVO,volFracs=runner(A=A)
   resultsElectroOnly,volFracs=runner(A=0.)
     
-  print "WARNING: vol fracs are wrong, need to check on comuations"
   #volFracs = 1-np.array([0.1,0.2,0.27,0.34,0.5])
   qs=np.array([-1,0,1])
   plt.figure()
