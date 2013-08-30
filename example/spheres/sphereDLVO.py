@@ -1,11 +1,28 @@
+## worked example 14.5, Israelachvilie Surface Forces book
+##
+## PARAMS 
+##
+# W(D) = 0.5 R Z exp(-kappa D) - A*R/12D
+print "WARNING: NEED TO DOUBLE CHECK THAT THIS IS THE CORRECT VDW TERM"
+print "WARNING: DLVO stuff is for LIKE charged surface, not opposite"
+print "So what i have is a hack"
+
 import sys
 prefix = "/net/home/huskeypm/Sources/"
 sys.path.append(prefix+"/smolhomog/example/")
 sys.path.append(prefix+"/modified-pb/example/")
+sys.path.append("/net/home/huskeypm/Sources/homogenization/example/volfracs/")
+sys.path.append("/net/home/huskeypm/bin/grids/")
+#import createVolumeFractionMeshes as cvm
 path = prefix+"/homogenization/example/volfracs/"
 import matplotlib.pylab as plt
 import numpy as np
 import poissonboltzmann as pb
+import homoglight as hl
+import caseRunner as cr
+debug = 0
+cr.dims = 3
+
 
 J_to_kT = 1/4.114e-21 # kT per J at 298 based on Iraelachvili
 kT_to_J = 1/J_to_kT
@@ -13,6 +30,7 @@ nm_to_m = 1e-9
 m_to_nm=1/nm_to_m
 nm_to_Ang = 10.
 Ang_to_m = 1e-10
+m_to_Ang = 1/Ang_to_m
 Ang_to_nm = 1e-1
 #mine
 ionC = 0.1 # [M] 
@@ -41,20 +59,12 @@ def mergeplot():
 
 # <codecell>
 
-# worked example 14.5, Israelachvilie Surface Forces book
-##
-## PARAMS 
-##
-# W(D) = 0.5 R Z exp(-kappa D) - A*R/12D
-print "WARNING: NEED TO DOUBLE CHECK THAT THIS IS THE CORRECT VDW TERM"
-print "WARNING: DLVO stuff is for LIKE charged surface, not opposite"
-print "So what i have is a hack"
 
 #Dnm= 0.25
 # A = 1e-20 # Hamaker [J]
 # R=0.1e-6; # particle diam, [m]
-
-def DLVO(Dnm,psi0=24.5,z=1,A = 1e-20, R=0.1e-6):
+# minDLVO [J] minimum value returned for W 
+def DLVO(Dnm,psi0=24.5,z=1,A = 1e-20, R=0.1e-6,minDLVO=-3*kT_to_J):
   D = Dnm*nm_to_m # D [m]
   # if validating against Israelach, use 9.38e-11 and psi0/107 for T=38
   absz = np.abs(z)
@@ -75,7 +85,7 @@ def DLVO(Dnm,psi0=24.5,z=1,A = 1e-20, R=0.1e-6):
   #print W1,W2,W
     
   # add fake repulsive  
-  W = np.max((W,-1.5e-19))
+  W = np.max((W,minDLVO)) 
   return W
 
 vW=np.vectorize(DLVO,otypes=[float])
@@ -89,9 +99,9 @@ def validateDLVO():
   A = 1e-20 # Hamaker [J]  for vesicles (Israelachvili)
   R=0.1e-6; # particle diam, [m]
     
-  runDLVO(A=A,R=R,name="dlvo_valid.png")
+  runDLVO(A=A,R=R,minDLVO=-1.5e-19,name="dlvo_valid.png")
     
-def runDLVO(A=1e-20,R=0.1e-6,name="dlvo.png"):    
+def runDLVO(A=1e-20,R=0.1e-6,minDLVO=-2*kT_to_J,name="dlvo.png"):    
   Dnm = np.linspace(0.1,8,80) # [nm]
   ## get sigmas from potentials so we can
   # adjust poetntial based on ionic str.
@@ -110,10 +120,10 @@ def runDLVO(A=1e-20,R=0.1e-6,name="dlvo.png"):
       psi0=pb.Grahame(sigma,ionC)
         
       if(units=="J"):   
-            vals =vW(Dnm,psi0,z,A,R)
+            vals =vW(Dnm,psi0,z,A,R,minDLVO)
             
       else:
-            vals =vW(Dnm,psi0,z,A,R) * J_to_kT
+            vals =vW(Dnm,psi0,z,A,R,minDLVO) * J_to_kT
       ax.plot(Dnm,vals,cols[j]+styles[i],\
               label="%4.1f [mV], z=%d" %(psi0,z))
 
@@ -140,20 +150,6 @@ def runDLVO(A=1e-20,R=0.1e-6,name="dlvo.png"):
 
 # <codecell>
 
-# shows difference between Israelach, and more protein-sized obstacles 
-def TestComparisons(): 
-
-  validateDLVO()
-
-  # for protein 
-  A = 5 * kT_to_J # 5 [kT] --> J
-  R = 12.5e-10 # [nm]
-  runDLVO(A=A,R=R,name="smallsphere.png")
-  plt.ylim([-2,1])
-
-  A = 0.001 * kT_to_J # 5 [kT] --> J
-  runDLVO(A=A,R=R,name="smallsphere_novdw.png")
-  plt.ylim([-2,1])
 
 # <markdowncell>
 
@@ -202,8 +198,19 @@ def ApplyDLVO(case="unitsphere",mesh="none",psi0 = 24.5,  z = 1.,R=1e-7,A=1e-20)
   if(case=="sphere"):
     sphereCenter=np.array([0.,0.,0.])
     #sphereCenter=np.array([-21.7,-21.7,-21.7])
-    dexpr = Expression("sqrt(pow(x[0]-cx,2)+pow(x[1]-cy,2)+pow(x[2]-cz,2))",\
-                        cx=sphereCenter[0],cy=sphereCenter[1],cz=sphereCenter[2])
+    # Get distance from sphere center, then substrate sphere radius to get
+    # distance from surface
+    R_Ang = R*m_to_Ang
+    dexpr = Expression("sqrt(pow(x[0]-cx,2)+pow(x[1]-cy,2)+pow(x[2]-cz,2))-R",\
+                        cx=sphereCenter[0],cy=sphereCenter[1],cz=sphereCenter[2],R= R_Ang)          
+    #boxDiam = np.max(mesh.coordinates())-np.min(mesh.coordinates())
+    #left = np.max(mesh.coordinates())
+    #print "Dexpr ", dexpr(left,0,0)
+    #print "Dexpr ", dexpr(left,left,left)
+    #print "Dexpr ", dexpr(R_Ang,0,0)
+    #print "BoxRad %f R %f " % (boxDiam/2., R_Ang)
+    #quit()
+
   # for actual geometry         
   if(case=="layer"):
     yt = 1 # y at top [A] 
@@ -230,12 +237,13 @@ def ApplyDLVO(case="unitsphere",mesh="none",psi0 = 24.5,  z = 1.,R=1e-7,A=1e-20)
     d = Function(V)
     d.vector()[:] = ds*nm_to_Ang
     File("distances.pvd") << d
-    #quit()
         
   #
   print "WARNING: this is a bit of a debugging hack to prevent divide by zeros"
-  ds[ np.where(ds < 0.1) ] = 0.1
-
+  tol = 1e-19
+  ds[ np.where(ds < tol) ] = tol
+  plt.plot(ds,np.zeros(np.shape(ds)[0]),"k.")
+  plt.xlabel("[nm]")
   # evaluate DLVO expression
   #ws = vW(ds.vector()[:],psi0,z)
   print "z=",z
@@ -246,38 +254,15 @@ def ApplyDLVO(case="unitsphere",mesh="none",psi0 = 24.5,  z = 1.,R=1e-7,A=1e-20)
   ws = vW(ds,psi0,z,A,R) * J_to_kT
   pmf = Function(V)
   pmf.vector()[:] = ws
+  plt.plot(ds,ws,"r.")
+  plt.gcf().savefig("distances.png") 
+
 
   ds*= nm_to_Ang
   return (ds,pmf)
 
-# <markdowncell>
-
-# Homogenization section 
-
-# <codecell>
-
-#sys.path.append("/home/huskeypm/sources/smolfin/")
-#sys.path.append("/home/huskeypm/sources/homogenization/")
-
 from dolfin import *
-#import imp
-#pb  = imp.load_source('poissonboltzmann.py', '/home/huskeypm/sources/smolfin/')
-meshName = "meshes/volFrac_0.10.xml"
 
-# quick test
-#mesh = Mesh(meshName)
-#import poissonboltzmann as pb
-#pb.params.molRad = 12.5
-#pb.params.domRad = 200
-#(V,x) = pb.SolvePoissonBoltzmann(mesh,meshType="gamer")
-
-import homoglight as hl
-debug = 0
-import caseRunner as cr
-cr.dims = 3
-
-#import homog_w_electro as hwe
-  #Dx = hwe.doit(meshFile="meshes/volFrac_0.10.xml",meshType="gamer")
 
 # molRad - radius of enzeyme 
 # z - enzyme charge
@@ -303,6 +288,7 @@ def CalcPMF(mesh,R,zLig,zProt,ionC=0.15, meshType="dolfin",pmfType="DebyeHuckel"
      pmf.vector()[:]= psi.vector()[:]*zLig
      pmfar = np.asarray(pmf.vector()[:])
      print "Pmf min/max %f/%f [kT]" %(np.min(pmfar),np.max(pmfar))
+     (ds,dummypmf)= ApplyDLVO(case=case,mesh=mesh,R=R*Ang_to_m) 
    
    elif(pmfType=="DLVO"): 
      #f = pb.DLVOExpr(dim=3)
@@ -317,24 +303,24 @@ def CalcPMF(mesh,R,zLig,zProt,ionC=0.15, meshType="dolfin",pmfType="DebyeHuckel"
 
    # compare
    if(1):
-     (ds,dummypmf)= ApplyDLVO(case=case,mesh=mesh) 
+     print "compare", np.min(ds), np.max(ds)
      # this is a bit of a hack to get the distances from the ApplyDLVO function 
      # plot
      plt.figure()
      #plt.plot(ds.vector().array(),pmf.vector().array(),'k.')
      plt.plot(ds*Ang_to_nm,pmf.vector().array(),'k.')
      plt.title("%s interaction energy \n(R=%4.2f [nm], H=%4.2f [kT],psi=%4.2f [mV],z=%d)" % (pmfType,R*Ang_to_nm,A*J_to_kT,psi0,zLig))
-     plt.xlabel("Dist from center [nm]") 
+     plt.xlabel("Dist from surface[nm]") 
      #plt.xlim([0,8])
      plt.ylim([-7,1])     
      plt.grid(True)
      plt.ylabel("Energy [kT]") 
      plt.gcf().savefig("pmfWRTDist.png") 
      File("testpmf.pvd") << pmf
-                
+
    return pmf
             
-# A Hamaker
+# A Hamaker [J] 
 def call(meshName,zLig,molRad,zProt,ionC=0.15,A=1e-20,molGamer=0,debug=0,pmfType="DLVO"):
 #  hwe.params.z = -1
 #  hwe.pb.molRad = 12.5
@@ -385,7 +371,8 @@ def call(meshName,zLig,molRad,zProt,ionC=0.15,A=1e-20,molGamer=0,debug=0,pmfType
   #       of [kT], e.g. already multiplied by zLig 
   results = hl.runHomog(fileXML=meshName,psi=pmf,q=1.,smolMode=True)
   Dx = results.d_eff[0]
-
+  volFrac = results.gamma
+    
   #(V,x) = pb.SolvePoissonBoltzmann(mesh)
   # do electro homog
   # store value
@@ -394,15 +381,14 @@ def call(meshName,zLig,molRad,zProt,ionC=0.15,A=1e-20,molGamer=0,debug=0,pmfType
   # moleculardomain.q =q 
   # moleculardomain.psi = psi
   
-  print "USe volume frac from homog calc"  
   #Dx = hwe.doit(meshFile=meshName, meshType="gamer")
-  return Dx
+  return Dx,volFrac
   
   
 def validation():
   meshPrefix = "example/volfracs/volFrac_0.10" 
   meshPrefix = path+"volFrac_0.10" 
-  meshName = meshPrefix+"_mesh.xml.gz"
+  meshName = meshPrefix+".xml.gz"
   
   zProt = -3
   molRad = 12.5 # A !! need to determine on the fly!!
@@ -410,11 +396,11 @@ def validation():
   zLig=1
   pmfType="DebyeHuckel"
   pmfType="DLVO"          
-  valuep =  call(meshPrefix,zLig,molRad,zProt,molGamer=0,pmfType=pmfType)             
+  valuep,phi =  call(meshPrefix,zLig,molRad,zProt,molGamer=0,pmfType=pmfType)             
   zLig=0.
-  value0 =  call(meshPrefix,zLig,molRad,zProt,molGamer=0,pmfType=pmfType)             
+  value0,phi = results.d_eff[0] =  call(meshPrefix,zLig,molRad,zProt,molGamer=0,pmfType=pmfType)             
   zLig=-1
-  valuen =  call(meshPrefix,zLig,molRad,zProt,molGamer=0,pmfType=pmfType)             
+  valuen,phi =  call(meshPrefix,zLig,molRad,zProt,molGamer=0,pmfType=pmfType)             
   #value130404=0.535335
   value130520=0.55234253        
 
@@ -428,13 +414,10 @@ def validation():
 # Semi-validated
 # Compared dlvo_valid.png with dlvotest.png for mesh and UnitCube 
 #  
-sys.path.append("/net/home/huskeypm/Sources/homogenization/example/volfracs/")
-sys.path.append("/net/home/huskeypm/bin/grids/")
-import createVolumeFractionMeshes as cvm
 def test():
-  meshPrefix = "example/volfracs/volFrac_0.10" 
+  meshPrefix = path+"volFrac_0.50" 
   meshPrefix = path+"volFrac_0.10" 
-  meshName = meshPrefix+"_mesh.xml.gz"
+  meshName = meshPrefix+".xml.gz"
   molRad = 12.5  # assuming thsi is correct for all meshes, and it is only the box size that varies 
 
 
@@ -448,27 +431,32 @@ def test():
 
   # semi-validated 
   zLig=-1
-  zProt =-4 # -25 mV
+  #zProt =-4 # -25 mV
   zProt =-5.4  # -25 mV
   ionC = 0.1
   debug = 0
 
-  # test 
-  zLig = -1
+  ## test 
+  pb.parms.zProt = zProt
 
-  A = 1e-20 # [J] Hamakaer
+  pmfType = "DLVO" 
+  
+  # neutral 
   zLig = 0.
   A = 0.
+  valueN,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+    
+  # -1 with A   
+  A = 3 * kT_to_J # [J] Hamakaer
+  zLig=-1  
+  valueM,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+    
 
-  pb.parms.zProt = zProt
-  pmfType = "DLVO" 
-  valuep = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+  print valueM,valueN,phi
+  return valueN
 
-  print valuep
-  return valuep
-
-  ## params 
-def runner():
+## params 
+def runner(A=1e-20):
   meshes = np.array([0.1,0.2,0.27,0.34,0.5])
   #meshes = np.array([0.1,0.2,0.27,0.34,0.5])
   # kappa hard coded into PB solver
@@ -488,31 +476,29 @@ def runner():
 #    meshes = volFracs
 #
   results = np.zeros([ np.shape(meshes)[0], np.shape(qs)[0] ])
-  
+  phis = np.zeros(np.shape(meshes)[0])
   for i, mesh in enumerate(meshes):
     for j, q in enumerate(qs):
       #meshName = "meshes/volFrac_%4.2f.xml" % meshes[i]
       #meshName = "meshes/volFrac_%4.2f_mesh.xml.gz" % meshes[i]
       #meshPrefix= "example/volfracs/volFrac_%4.2f" % meshes[i]  
       meshPrefix= path+"/volFrac_%4.2f" % mesh
-      meshName=meshPrefix+"_mesh.xml.gz"
+      meshName=meshPrefix+".xml.gz"
       print "WARNING: molRads are NOT correct" 
       #molGamer = 1
       molGamer = 0
-      results[i,j] = call(meshName  ,q,molRad,zProt,molGamer=molGamer,pmfType=pmfType)
+      results[i,j],phis[i] = call(meshName,q,molRad,zProt,A=A,molGamer=molGamer,pmfType=pmfType)
 
-  print "WARNING: should obtain these directly from sims, not ests"
-  volFracActual = 1-volFracs
 
-  #if(debug==1):
-  #  return
-
-  return volFracs,results
+  return results,phis
   
   
 def doit(asdf):
-  volFracs,results runner()
-
+  A = 1e-20 # [J] Hamaker   
+    
+    
+  results,volFracs=runner(A=A)
+    
   plt.figure()
   col = ["r--","r-","k-","b-","b--"]
   for j, q in enumerate(qs):
@@ -529,6 +515,20 @@ def doit(asdf):
   plt.gcf().savefig("volfrac.png")
   
 
+# shows difference between Israelach, and more protein-sized obstacles 
+def TestComparisons(A_kT=5.): 
+
+  validateDLVO()
+
+  # for protein 
+  A = A_kT * kT_to_J # 5 [kT] --> J
+  R = 12.5e-10 # [nm]
+  runDLVO(A=A,R=R,name="smallsphere.png")
+  plt.ylim([-2,1])
+
+  A = 0.001 * kT_to_J # 5 [kT] --> J
+  runDLVO(A=A,R=R,name="smallsphere_novdw.png")
+  plt.ylim([-2,1])
 
 
 
@@ -580,24 +580,44 @@ Notes:
     if(arg=="-test1"): 
       TestComparisons()
       quit()  
+    if(arg=="-test"): 
+      test()
+      quit()
 
 
-# <codecell>
 
 
-# <codecell>
+if(1): 
+  A = 1e-20 # [J] Hamaker   
+  resultsDLVO,volFracs=runner(A=A)
+  resultsElectroOnly,volFracs=runner(A=0.)
+    
+  print "WARNING: vol fracs are wrong, need to check on comuations"
+  volFracs = 1-np.array([0.1,0.2,0.27,0.34,0.5])
+  qs=np.array([-1,0,1])
+  plt.figure()
+  #col = ["r--","r-","k-","b-","b--"]
+  col = ["r-","k-","b-"]  
+  for j, q in enumerate(qs):
+    label = "zLig= %d " % q
+    plt.plot(volFracs,resultsElectroOnly[:,j], col[j],label=label)
+    
+  #col = ["r--","r-","k-","b-","b--"]
+  col = ["r-.","k-.","b-."]  
+  for j, q in enumerate(qs):
+    label = "zLig= %d +VDW" % q
+    plt.plot(volFracs,resultsDLVO[:,j], col[j],label=label)    
+    
+  phi = volFracs
+  HS = phi/(2-phi)
+  plt.plot(volFracs,HS, "k.",label="HS (cylinder)")
 
-#validateDLVO()
-
-# <codecell>
-
-
-#value = test(sigma=)
-
-# <codecell>
-
-#print value
-
-# <codecell>
-
+  title="Protein with DLVO interactions (zProtein=%d)"\
+     % zProt
+    
+  plt.title(title)
+  plt.xlabel("$\phi$")
+  plt.ylabel("D")
+  plt.legend(bbox_to_anchor = (1.5, 0.7),ncol=1)
+    
 
