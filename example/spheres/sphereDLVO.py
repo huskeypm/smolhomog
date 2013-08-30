@@ -638,6 +638,42 @@ def final():
   plt.gcf().savefig("final.png") 
     
 
+# Shows the role of chemica specificity in changing diffusion rates
+def chemSpecificity():
+  # get data for non-specific
+  parms.A =0.2*kT_to_J
+  results,phis = runner()
+  
+  # at molFrac 0.5 (12.5*2 = 25 + margin)
+  # 27*27*27 cubic angstroms into decimeters cubed 
+  # 1.9e-23
+  B = 1.9683e-23*6.02e23 # seems high, but that about right for 55 waters
+  
+  # use a more modest value
+  B=1e-6 # [M] 
+  
+  # store Ds for z=-1, z=1
+  Dn=results[:,0]
+  Dp=results[:,2]
+  
+  plt.figure()
+  plt.plot(phis,Dn,"r-",label="z=-1")
+  exps=np.array([0,-6,-7])
+  KDs = 10.**(exps )
+  cols = ['b-','b--','b-.']
+  for i,KD in enumerate(KDs):
+    # from Cheng, PLOS Comp Bio
+    Dp_KD =  Dp / (1 + B/KD)
+    plt.plot(phis,Dp_KD,cols[i],label="z= 1, $K_D$=10$^{%d}$"%exps[i])
+      
+  plt.legend(loc=0)    
+  plt.ylim([0,2.5])    
+  plt.title("Chemical specificity") 
+  plt.xlabel("$\phi$") 
+  plt.ylabel("D") 
+  plt.gcf().savefig("chemspec.png") 
+
+
 
 
 
@@ -690,6 +726,7 @@ Notes:
       test()
       quit()
     if(arg=="-final"): 
+      chemSpecificity()
       final()
       quit()
 
