@@ -6,12 +6,6 @@ import numpy as np
 import matplotlib.pylab as plt
 
 
-root = "example/lattice/"
-beta = 1/0.6
-lMarker = 2
-rMarker = 3
-class empty:pass
-
 class LeftBoundary(SubDomain):
   def inside(self,x,on_boundary):
     edge = (np.abs(x[0]- -8) < DOLFIN_EPS) 
@@ -43,108 +37,11 @@ class MyEquation(NonlinearProblem):
           bc.apply(A)
         self.reset_sparsity = False
 
-def steadysolve(Diff=1.,fileName="m25.xml",outName="output.pvd",mode="pointsource",pmf=0.): 
 
-  problem = probdef(Diff,fileName,mode,pmf) #,debug=True) 
-
-  ds = problem.ds
-  pmf = problem.pmf
-  V = problem.V
-  du = problem.du
-  #u = problem.u
-  q = problem.q
-  D = problem.D
-  bcs= problem.bcs
-  mesh= problem.mesh
-  expnpmf = problem.expnpmf
-  subdomains = problem.subdomains
-
-  #######
-  bcs=[]
-  subdomains = MeshFunction("uint",mesh,1)
-  boundary = LeftBoundary()
-  boundary.mark(subdomains,lMarker)
-  boundary = RightBoundary()
-  boundary.mark(subdomains,rMarker)
-  bcs.append(DirichletBC(V,Constant(1.0),subdomains,lMarker))
-  bcs.append(DirichletBC(V,Constant(0.0),subdomains,rMarker))
-  ds = Measure("ds")[subdomains]
-  
-  # borrow other setup
-  form = -inner(D*expnpmf*grad(du), grad(q))*dx
-  a = lhs(form) 
-  L = rhs(form) 
-
-  # 2 D: 
-  # get steady soln
-  x = Function(V) 
-  solve(a==L,x,bcs=bcs)
-  #File("x.pvd") << x
-
-  # evaluate flux at RHS
-  up = Function(V)  
-  up.vector()[:] = expnpmf.vector()[:] * x.vector()[:]
-  File(outName) << up
-  #up = project(expnpmf*x)
-  print "Unprojected Solution range: %f - %f " %  (min(x.vector()),max(x.vector()))
-  print "Projected Solution range: %f - %f " %  (min(up.vector()),max(up.vector()))
-
-  Jp = D * grad(up)  + D *  beta * up * grad(pmf)
-  #boundary_flux_terms = assemble(dot(Jp, tetrahedron.n)*ds(rMarker),
-  #                              exterior_facet_domains = subdomains) 
-  subdomainMarker = rMarker
-  # NOTE that i use 'triangle' instead of tetrahedron, since this is a 2D mesh
-  boundary_flux_terms = assemble(dot(Jp,triangle.n)*ds(rMarker),
-                                mesh=mesh,
-                                exterior_facet_domains = subdomains)
-  subdomainArea = assemble(Constant(1.0)*ds(rMarker),
-                                mesh=mesh,
-                                exterior_facet_domains = subdomains)
-  jRHS_avg = boundary_flux_terms/subdomainArea 
- 
-  # conc at LHS, LHS
-  cRHS = assemble(x*ds(rMarker)) / assemble(Constant(1.)*ds(rMarker),mesh=mesh)
-  cLHS = assemble(x*ds(lMarker)) / assemble(Constant(1.)*ds(lMarker),mesh=mesh)
-
-  # del x 
-  mins = np.min(mesh.coordinates(),axis=0)
-  maxs = np.max(mesh.coordinates(),axis=0)
-  del_x = maxs[0] - mins[0]
-  del_c_del_x = (cRHS - cLHS) / del_x 
-
-  # 1 D: 
-  # jRHS = Deff * del c / del x 
-  Deff = jRHS_avg / del_c_del_x
- 
-
-  # get total cell vol
-  totalVol = np.prod(maxs-mins)
-
-  # get accessible vol 
-  accessibleVol = assemble(Constant(1.)*dx,mesh=mesh)
-  volFrac = accessibleVol/totalVol
-
-
-  # report
-  print "Deff %4.2f lower: %4.2f upper: %4.2f " %\
-    (Deff, 2*volFrac/3,2*volFrac/(3-volFrac))
-
-  return Deff,volFrac
-
-def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False):
-
-  
+def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=1.):
   D = Constant(Diff) 
   # Create mesh and define function space
-  if(debug):
-    mesh = UnitSquare(8,8)    
-    mesh.coordinates()[:] = mesh.coordinates()[:] * np.array([16,16])
-    mesh.coordinates()[:] = mesh.coordinates()[:] - np.array([16,16])/2.
-  else:
-    mesh = Mesh(fileName)     
-
-  #print np.min(mesh.coordinates(),axis=0)
-  #print np.max(mesh.coordinates(),axis=0)
+  mesh = Mesh(fileName)     
   V = FunctionSpace(mesh, "Lagrange", 1)
   
   
@@ -159,10 +56,10 @@ def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False)
   ## mark boundaries 
   subdomains = MeshFunction("uint",mesh,1)
   boundary = LeftBoundary()
-
+  lMarker = 2
   boundary.mark(subdomains,lMarker)
   boundary = RightBoundary()
-
+  rMarker = 3
   boundary.mark(subdomains,rMarker)
 
   ## decide on source of probability density  
@@ -191,46 +88,8 @@ def probdef(Diff=1.,fileName="m25.xml.gz",mode="pointsource",pmf=1.,debug=False)
     bc.apply(f.vector())
     File("bc.pvd") << f
 
-  if(pmf==0):
-    pmf = Function(V)
-    pmf.vector()[:]=0.
-  else:
-    raise RuntimeError("Something is incorrectly done with PMF, since even neutral case is wrong (see validInert, commented oput") 
   ds = Measure("ds")[subdomains]
 
-  problem = empty()
-  problem.subdomains = subdomains 
-  problem.mesh = mesh
-  problem.V = V
-  problem.ds = ds 
-  problem.du = du 
-  problem.pmf = pmf 
-  problem.bcs = bcs 
-  problem.u = u 
-  problem.q = q 
-  problem.D = D 
-  problem.u0 = u0 
-  problem.expnpmf=Function(V)
-  problem.expnpmf.vector()[:] = np.exp(-pmf.vector()[:]*beta)
-  
-
-  return problem
-
-
-def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=1.):
-  problem = probdef(Diff,fileName,mode,pmf) 
-
-  ds = problem.ds
-  pmf = problem.pmf
-  V  = problem.V
-  u = problem.u
-  du = problem.du
-  q = problem.q
-  D = problem.D
-  u0 = problem.u0
-  bcs = problem.bcs
-  expnpmf = problem.expnpmf
-  mesh = problem.mesh
   
   ## weak form 
   # weak form of smol is
@@ -240,7 +99,8 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   # Int[ e^-*(u'*v - u0'*v - -dt(grad(u')*grad(v))] 
   dt=15.0   
   T=1000 
-
+  expnpmf=Function(V)
+  expnpmf.vector()[:] = np.exp(-pmf/0.6)
   RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
   L = (expnpmf*u*q*dx - expnpmf*u0*q*dx - dt*RHS)
   
@@ -283,27 +143,29 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
 
   return (ts,concs)
 
-def DHExpression(x0=0,x1=0,prefac=1,k=10):
-  exact=0
+def DHExpression(x0=0,x1=0):
   if(exact==1):
     import sys
     sys.path.append("/home/huskeypm/sources/fenics-pb/pete") 
     import poissonboltzmann as pb
-    pb.params.center=np.array([x0,x1,0.])
-    print "need to adjust DH to use center (power(x[0]-c0,2) "
-    pb.params.molrad = 1. 
-    print "WARNING: what is radius from original mesh eneration? "
+    pb.params.center=np.array([x0,x1,0.]) need to adjust DH to use center (power(x[0]-c0,2) 
+    pb.params.molrad = what is radius from original mesh eneration? 
     exprA = pb.DebyeHuckelExpr()
 
   else:
-    #exprA = Expression("-1*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.1)",x0=x0,x1=x1)
-    exprA = Expression("-prefac*exp(-k*sqrt((pow(x[0]-x0,2) + pow(x[1]-x1,2))))/sqrt((pow(x[0]-x0,2) + pow(x[1]-x1,2)))",
-      prefac=prefac,k=k, x0=x0,x1=x1)
+    exprA = Expression("-3*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.1)",x0=x0,x1=x1)
 
   return exprA
 
-## make pmf maps 
-def CalcPMF(V):
+
+def valid2():
+  mode = "bc"
+  mesh = Mesh("m15.xml.gz") 
+  V = FunctionSpace(mesh,"CG",1)
+  #exprA = Expression("-0.1*(x[0]+10)") # attractive 
+  #exprR = Expression(" 0.1*(x[0]+10)") # repulsive     
+
+  ## make pmf maps 
   pmf = Function(V) 
   mask = np.copy(pmf.vector())
 
@@ -318,141 +180,6 @@ def CalcPMF(V):
 
   pmf.vector()[:] = mask
 
-  return(pmf)
-
-# Deff for wrt 'prefac'
-def valid4():
-  case = "m50"
-  fileName = root+case+".xml.gz"
-  V = FunctionSpace( Mesh(fileName ), "CG", 1) 
-  pmf = CalcPMF(V)
-  prefacs = np.linspace(-0.1,0.1,11) 
-  deffs = np.zeros(np.shape(prefacs)[0])
-  for i,prefac in enumerate(prefacs):
-    prefac=0.
-    fileName = root+case+".xml.gz"
-    pmfi = Function(V)
-    pmfi.vector()[:] = prefac*pmf.vector()[:]
-    (deffs[i],volFrac) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd",pmf=pmfi)
-
-
-  plt.figure()
-  plt.plot(prefacs,deffs,"k-",label="prefacs")
-  nidx = np.where(prefacs==0)
-  plt.plot(prefacs[nidx],deffs[nidx],"k.",label="neutral")
-  plt.legend(loc=4)
-  title = "Deff vs potential"
-  plt.title(title)
-  plt.ylim([0,1])
-  plt.ylabel("D_eff/D")
-  plt.xlabel("$\phi$")
-  figname ="stystate_deff_vs_potent.png"
-  plt.gcf().savefig(figname)
-  
-  
-
-
-# Deff for wrt vol frac for neutral, positive and negative interations
-def valid3():
-  #
-  mode = "pointsource"
-  mode = "bc"
-  cases = ["m15","m25","m50","m75","m85"]
-  deffNs = np.zeros(len(cases))
-  deffAs = np.zeros(len(cases))
-  deffRs = np.zeros(len(cases))
-  volFracs = np.zeros(len(cases))
-
-
-  for i,case in enumerate(cases):
-    fileName = root+case+".xml.gz"
-    V = FunctionSpace( Mesh(fileName ), "CG", 1) 
-    pmf = CalcPMF(V)
-    ## create pmfs going into attractive, neutral, repulseive cases
-    pmfn = Function(V)
-    pmfn.vector()[:] = 0.
-    pmfa = Function(V)
-    pmfa.vector()[:] = pmf.vector()[:] 
-    pmfr = Function(V)
-    pmfr.vector()[:] = -1*pmf.vector()[:] 
-  
-    print "--Neutral"
-    (deffNs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd",pmf=pmfn)
-    print "--Attractive"
-    (deffAs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15a.pvd",pmf=pmfa)
-    print "--Repulsive"
-    (deffRs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15r.pvd",pmf=pmfr)
-    #quit()
-
-  #valid  = np.where(deffs < 1.) 
-  #deffs = deffs[ valid ] 
-  #volFracs = volFracs [ valid ] 
-
-
-  plt.figure()
-  plt.plot(volFracs,deffNs,"k.",label="neutral")
-  plt.plot(volFracs,deffAs,"b.",label="attractive")
-  plt.plot(volFracs,deffRs,"r.",label="repulsive")
-  plt.plot(volFracs,2*volFracs/3,"k--",label="lower")
-  plt.plot(volFracs,2*volFracs/(3-volFracs),"k-.",label="upper")
-  plt.legend(loc=4)
-  title = "Deff from steady-state non-homogenized lattice"
-  plt.title(title)
-  plt.ylabel("D_eff/D")
-  plt.xlabel("$\phi$")
-  figname ="stystate_deff.png"
-  plt.gcf().savefig(figname)
-  
-
-# Deff for wrt vol frac for neutral
-def validInert():
-  #
-  mode = "bc"
-  cases = ["m15","m25","m50","m75","m85"]
-  deffNs = np.zeros(len(cases))
-  deffNIs = np.zeros(len(cases))
-  volFracs = np.zeros(len(cases))
-
-
-  for i,case in enumerate(cases):
-    fileName = root+case+".xml.gz"
-    V = FunctionSpace( Mesh(fileName ), "CG", 1)
-    pmfn = Function(V)
-    pmfn.vector()[:] = 0.
-
-    print "--Neutral"
-    (deffNs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd")                  
-    #(deffNIs[i],volFracs[i]) = steadysolve(Diff=1.,fileName=fileName,outName="o15n.pvd",pmf=pmfn)
-
-  #valid  = np.where(deffs < 1.) 
-  #deffs = deffs[ valid ] 
-  #volFracs = volFracs [ valid ] 
-
-
-  plt.figure()
-  plt.plot(volFracs,deffNs,"k.",label="neutral (sphere lattice)")
-  #plt.plot(volFracs,deffNIs,"b.",label="neutral (sphere lattice/interp'd PMF)")
-  plt.plot(volFracs,2*volFracs/3,"k--",label="lower (for cube lattice)")
-  plt.plot(volFracs,2*volFracs/(3-volFracs),"k-.",label="upper (for cube lattice)")
-  plt.legend(loc=4)
-  title = "Deff from steady-state non-homogenized lattice"
-  plt.title(title)
-  plt.ylabel("D_eff/D")
-  plt.xlabel("$\phi$")
-  figname ="stystate_deff_inert.png"
-  plt.gcf().savefig(figname)
-
-
-
-
-def valid2():
-  mode = "bc"
-  mesh = Mesh(root+"m15.xml.gz") 
-  V = FunctionSpace(mesh,"CG",1)
-  #exprA = Expression("-0.1*(x[0]+10)") # attractive 
-  #exprR = Expression(" 0.1*(x[0]+10)") # repulsive     
-
-  pmf = CalcPMF(V)
 
   ## create pmfs going into attractive, neutral, repulseive cases
   pmfn = Function(V)
@@ -463,13 +190,13 @@ def valid2():
   pmfr.vector()[:] = -1*pmf.vector()[:] 
   
   plt.figure()
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m15.xml.gz",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
   plt.plot(ts,concs,"k--",label="neutral") 
   # 
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m15.xml.gz",outName="o15a.pvd",mode=mode,pmf=pmfa.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15a.pvd",mode=mode,pmf=pmfa.vector())
   plt.plot(ts,concs,"b.",label="attractive") 
   # 
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m15.xml.gz",outName="o15r.pvd",mode=mode,pmf=pmfr.vector())
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15r.pvd",mode=mode,pmf=pmfr.vector())
   plt.plot(ts,concs,"r.",label="repulsive") 
 
   ##
@@ -493,19 +220,19 @@ def valid1():
   #(ts,concs) = tsolve(Diff=1.,fileName="m25.xml",outName="o25_1.pvd",mode=mode) 
   #plt.plot(ts,concs,"k-",label="Diff=1., m25")
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m15.xml.gz",outName="o15.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15.pvd",mode=mode) 
   plt.plot(ts,concs,"b-",label="Diff=1.0, m15",lw=1)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m25.xml.gz",outName="o25.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m25.xml.gz",outName="o25.pvd",mode=mode) 
   plt.plot(ts,concs,"b-",label="Diff=1.0, m25",lw=2)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m50.xml.gz",outName="o50.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m50.xml.gz",outName="o50.pvd",mode=mode) 
   plt.plot(ts,concs,"b-.",label="Diff=1.0, m50",lw=3)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m75.xml.gz",outName="o75.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m75.xml.gz",outName="o75.pvd",mode=mode) 
   plt.plot(ts,concs,"b-.",label="Diff=1.0, m75",lw=4)
   #
-  (ts,concs) = tsolve(Diff=1.0,fileName=root+"m85.xml.gz",outName="o85.pvd",mode=mode) 
+  (ts,concs) = tsolve(Diff=1.0,fileName="m85.xml.gz",outName="o85.pvd",mode=mode) 
   plt.plot(ts,concs,"b--",label="Diff=1.0, m85",lw=5)
     
   
@@ -528,7 +255,7 @@ Purpose:
  
 Usage:
 """
-  msg+="  %s -valid1/-valid2" % (scriptName)
+  msg+="  %s validation/intact" % (scriptName)
   msg+="""
   
  
@@ -549,13 +276,6 @@ Notes:
       valid1()
     if(arg=="-valid2"):
       valid2()
-    if(arg=="-valid3"):
-      valid3()
-    if(arg=="-valid4"):
-      valid4()
-    if(arg=="-validInert"):
-      validInert()
 
-  #raise RuntimeError(msg)
 
 
