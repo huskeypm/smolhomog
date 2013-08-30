@@ -371,7 +371,7 @@ def call(meshName,zLig,molRad,zProt,ionC=0.15,A=1e-20,molGamer=0,debug=0,pmfType
   #       of [kT], e.g. already multiplied by zLig 
   results = hl.runHomog(fileXML=meshName,psi=pmf,q=1.,smolMode=True)
   Dx = results.d_eff[0]
-  volFrac = results.gamma
+  volFrac = results.volFrac
     
   #(V,x) = pb.SolvePoissonBoltzmann(mesh)
   # do electro homog
@@ -415,9 +415,6 @@ def validation():
 # Compared dlvo_valid.png with dlvotest.png for mesh and UnitCube 
 #  
 def test():
-  meshPrefix = path+"volFrac_0.50" 
-  meshPrefix = path+"volFrac_0.10" 
-  meshName = meshPrefix+".xml.gz"
   molRad = 12.5  # assuming thsi is correct for all meshes, and it is only the box size that varies 
 
 
@@ -432,7 +429,8 @@ def test():
   # semi-validated 
   zLig=-1
   #zProt =-4 # -25 mV
-  zProt =-5.4  # -25 mV
+  #zProt =-5.4  # -25 mV
+  zProt = -3
   ionC = 0.1
   debug = 0
 
@@ -441,15 +439,31 @@ def test():
 
   pmfType = "DLVO" 
   
-  # neutral 
-  zLig = 0.
-  A = 0.
-  valueN,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+  ## check that repolsive electro + attract VDW 'beats' purely neutral case 
+  if(0): 
+    meshName= path+"volFrac_0.10.xml.gz" 
+    # neutral 
+    zLig = 0.
+    A = 0.
+    valueN,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
     
-  # -1 with A   
-  A = 3 * kT_to_J # [J] Hamakaer
-  zLig=-1  
-  valueM,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+    # -1 with A   
+    A = 3 * kT_to_J # [J] Hamakaer
+    zLig=-1  
+    valueM,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+
+  if(1): 
+    meshName= path+"volFrac_0.50.xml.gz" 
+    # neutral 
+    zLig = 0.
+    A = 0.
+    valueN,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+    
+    # -1 with A   
+    A = 0.5 * kT_to_J # [J] Hamakaer
+    zLig=-1  
+    valueM,phi = call(meshName,zLig,molRad,zProt,ionC=ionC,A=A,molGamer=0,debug=debug,pmfType=pmfType)             
+    
     
 
   print valueM,valueN,phi
@@ -533,6 +547,41 @@ def TestComparisons(A_kT=5.):
 
 
 
+def final(): 
+  A = 1e-20 # [J] Hamaker   
+  resultsDLVO,volFracs=runner(A=A)
+  resultsElectroOnly,volFracs=runner(A=0.)
+    
+  print "WARNING: vol fracs are wrong, need to check on comuations"
+  #volFracs = 1-np.array([0.1,0.2,0.27,0.34,0.5])
+  qs=np.array([-1,0,1])
+  plt.figure()
+  #col = ["r--","r-","k-","b-","b--"]
+  col = ["r-","k-","b-"]  
+  for j, q in enumerate(qs):
+    label = "zLig= %d " % q
+    plt.plot(volFracs,resultsElectroOnly[:,j], col[j],label=label)
+    
+  #col = ["r--","r-","k-","b-","b--"]
+  col = ["r-.","k-.","b-."]  
+  for j, q in enumerate(qs):
+    label = "zLig= %d +VDW" % q
+    plt.plot(volFracs,resultsDLVO[:,j], col[j],label=label)    
+    
+  phi = volFracs
+  HS = phi/(2-phi)
+  plt.plot(volFracs,HS, "k.",label="HS (cylinder)")
+
+  title="Protein with DLVO interactions (zProtein=%d)"\
+     % -1000 
+    
+  plt.title(title)
+  plt.xlabel("$\phi$")
+  plt.ylabel("D")
+  plt.legend(bbox_to_anchor = (1.5, 0.7),ncol=1)
+  plt.gcf().savefig("final.png") 
+    
+
 
 
 
@@ -583,41 +632,10 @@ Notes:
     if(arg=="-test"): 
       test()
       quit()
+    if(arg=="-final"): 
+      final()
+      quit()
 
 
 
-
-if(1): 
-  A = 1e-20 # [J] Hamaker   
-  resultsDLVO,volFracs=runner(A=A)
-  resultsElectroOnly,volFracs=runner(A=0.)
-    
-  print "WARNING: vol fracs are wrong, need to check on comuations"
-  volFracs = 1-np.array([0.1,0.2,0.27,0.34,0.5])
-  qs=np.array([-1,0,1])
-  plt.figure()
-  #col = ["r--","r-","k-","b-","b--"]
-  col = ["r-","k-","b-"]  
-  for j, q in enumerate(qs):
-    label = "zLig= %d " % q
-    plt.plot(volFracs,resultsElectroOnly[:,j], col[j],label=label)
-    
-  #col = ["r--","r-","k-","b-","b--"]
-  col = ["r-.","k-.","b-."]  
-  for j, q in enumerate(qs):
-    label = "zLig= %d +VDW" % q
-    plt.plot(volFracs,resultsDLVO[:,j], col[j],label=label)    
-    
-  phi = volFracs
-  HS = phi/(2-phi)
-  plt.plot(volFracs,HS, "k.",label="HS (cylinder)")
-
-  title="Protein with DLVO interactions (zProtein=%d)"\
-     % zProt
-    
-  plt.title(title)
-  plt.xlabel("$\phi$")
-  plt.ylabel("D")
-  plt.legend(bbox_to_anchor = (1.5, 0.7),ncol=1)
-    
 
