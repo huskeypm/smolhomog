@@ -154,6 +154,7 @@ Notes:
 
 """
   remap = "none"
+  raise RuntimeError("Use notebook, which is more curent") 
 
   if len(sys.argv) < 2:
       raise RuntimeError(msg)
