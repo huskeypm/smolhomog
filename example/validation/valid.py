@@ -315,7 +315,10 @@ def fig9():
     ax = plt.subplot(gs[0])
     labs = ['b-','b-.','b--','k-','r--','r-.','r-']
     
-    for j in range(ns):
+    # Doing negative only
+    #for j in range(ns):
+    nums = range(ns)[0:4]
+    for idx,j in enumerate(nums): 
       ax.plot(vFracs, outs[j,:],labs[j],label="$\sigma$=%5.3f $[C/m^2]$" % sigmas[j] )
     
     hs = vFracs/(2-vFracs)      
