@@ -404,6 +404,7 @@ Notes:
 
 """
   remap = "none"
+  raise RuntimeError("this script is antiquared, but not fully reflected in noobstavle_prl.py") 
 
   if len(sys.argv) < 2:
       raise RuntimeError(msg)
