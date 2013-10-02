@@ -1,15 +1,20 @@
-import matplotlib.pyplot as plt 
+# -*- coding: utf-8 -*-
+# <nbformat>2</nbformat>
+
+# <codecell>
 
 from dolfin import *
 import sys, math, numpy
 import numpy as np
 from scipy.interpolate import griddata   
+import matplotlib.pylab as plt
 
 tol = 1E-14   # tolerance for coordinate comparisons
 EPS=tol
 boundsMin = np.zeros(3)
 boundsMax = np.zeros(3)
 
+# <codecell>
 
 ## Define layered problem over omega in [0,1] where obstacles 
 ## are represented by large PMF (Omega0, Omega2)
@@ -81,8 +86,10 @@ class Omega1(SubDomain):
           return True if (x[0] >= parms.minSide and x[0]<=parms.maxSide \
                           and x[1]>= parms.minSide and x[1]<=parms.maxSide) else False 
 
+# <codecell>
 
 
+## computes eff diff coefficient for a variety of cases in which the barrier is defined by PMF, not actual boundary condition
 # barrier height is in units E/kT
 # discontinuous - use 'discontinuous' PMF [e.g. 0 for free region, non-zero elsewhere]. 
 #                 If False, a smoothly varying PMF is used 
@@ -90,12 +97,11 @@ class Omega1(SubDomain):
 # fileIn - used with mode='hack2' to import externally-computed potential 
 # potential MUST be unitless (e.g. multiply by F/RT before passing into this function)
 def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
-         mode="default",pmfScale=1, pmfWidth=0.02, plot=False,outName="img.png",fileIn="",potential=""):
+         mode="default",pmfScale=1, pmfWidth=0.02, plot=False,outName="img.png",fileIn="",potential="none"):
     ## params
     parms.margin=margin
     parms.update()
     
-    print mode 
     ## Define Mesh
     nx = 100; 
     #dim = 1
@@ -223,11 +229,11 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     File("out.pvd") << u
 
     ## DEBUG 
-    Vs = FunctionSpace(mesh,"CG",1)
-    up = project(u[0],V=Vs)    
-    ar=np.asarray(up.vector())
-    print "Noobs ", np.min(ar)
-    print "Noobs ", np.max(ar)
+    #Vs = FunctionSpace(mesh,"CG",1)
+    #up = project(u[0],V=Vs)    
+    #ar=np.asarray(up.vector())
+    #print "Noobs ", np.min(ar)
+    #print "Noobs ", np.max(ar)
     #z = project(k*u,V)
     #File("wrong.pvd") << z
     
@@ -381,12 +387,159 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     return results
     
 
-   
-import sys
-#
-# Revisions
-#       10.08.10 inception
-#
+## I think I am just exemplifying chi distro, eff diff for different DISCONTINUOUS potentials
+def DiscontTest():
+	#results=doit(dim=2,discontinuous=True,barrierHeight=-2,mode="hack",plot=True)
+	#results=doit(dim=2,discontinuous=True,barrierHeight=-0.5,mode="hack",plot=True)
+	results=doit(dim=2,discontinuous=True,barrierHeight=-0.3,mode="hack",plot=True)
+	results=doit(dim=2,discontinuous=True,barrierHeight=0,mode="hack",plot=True)
+	results=doit(dim=2,discontinuous=True,barrierHeight=15,mode="hack",plot=True)
+
+   	results=doit(dim=2,margin=0.1,plot=True,outName="discontinuousRepulsive.png")
+
+# <codecell>
+# for smoothly-varying potentials
+def SmoothTest():
+  results=doit(dim=2,discontinuous=False,pmfScale=1,plot=True,outName="smoothRepulsive.png")
+  results=doit(dim=2,discontinuous=False,pmfScale=-1,plot=True,outName="smoothAttractive.png")
+
+
+# explicit obstacle + pmf 
+def HoleTest():
+	# <codecell>
+
+	results=doit(dim=2,discontinuous=False,pmfScale=-1,mode="hole",plot=True,outName="holeAttractive.png")
+	#results=doit(dim=2,discontinuous=False,pmfScale=0,mode="hole",plot=True,outName="holeNeutral.png")
+	#results=doit(dim=2,discontinuous=False,pmfScale=1,mode="hole",plot=True,outName="holeRepulsive.png")
+
+def validationDiscontVsRepulsive():
+	margins=np.linspace(0.05,0.48,20);
+	Dss = []
+	Dsanals=[]
+	phis=[]
+
+	for i,margin in enumerate(margins):
+	    results = doit(dim=2,margin=margin,plot=False)
+	    Dss.append(results.Ds[0])
+	    Dsanals.append(results.Dsanal)
+	    phis.append(results.phi)
+	    
+	Dss = np.array(Dss) 
+	Dsanals = np.array(Dsanals)
+	phis = np.array(phis)
+
+	# <codecell>
+
+	# plot and process
+	plt.figure()
+	plt.plot(phis,Dss,'k.',label="Predicted")
+	plt.plot(phis,Dsanals,'k--',label="HS bound")
+	plt.legend(loc=0)
+	plt.ylabel("D")
+	plt.xlabel("Accessible volume fraction, $\phi$")
+	plt.title("Homogenized smoluchowski equation with Box PMF")
+	plt.gcf().savefig("validationDiscontinuousRepulsive.png")
+
+        results = empty()
+	results.Dss = Dss
+	results.Dsanals = Dsanals
+        results.phis = phis
+	return results
+
+# <codecell>
+# gives chi solutions and eff. diff for a given vol frac wrt pmf ampl. 
+def pmfAmplitudes(): 
+	allResults = []
+
+	kT = 0.6 # [kcal/mol]
+	barrierHeights = np.linspace(-5,5,9)
+	#barrierHeights = np.array([-6,-1,0,1,2])
+	cols=['b-','b--','b-.','b.','k-','r.','r-.','r--','r-']
+	margin=0.2
+
+	plt.figure()
+	plt.subplot(121)
+	Dss = []
+	for i,barrierHeight in enumerate(barrierHeights):
+	  VkT = barrierHeight/kT
+	  results=doit(dim=2,margin=margin,barrierHeight=VkT,plot=True)
+	  Dss.append(results.Ds[0])
+	  label = "V=%3.1f" % barrierHeight
+	  plt.plot(results.gx[:,0],results.interp1,cols[i],label=label)
+	  allResults.append(results)
+	    
+
+	plt.legend(bbox_to_anchor=(2.5, -.2),ncol=5)
+	plt.xlabel("x")
+	plt.ylabel("$\chi_x$") 
+	plt.title("$\chi$")
+
+	maxHeight = 10
+	results=doit(dim=2,margin=margin,barrierHeight=maxHeight,plot=True)
+	Dss = np.asarray(Dss)
+	plt.subplot(122)
+	plt.plot(barrierHeights,Dss,'k-',label="Predicted")
+	plt.scatter(0, 1.0, s=80, facecolors='none', edgecolors='k',label="Free")
+	plt.scatter(maxHeight, results.phi/(2-results.phi), s=80, facecolors='k', edgecolors='k',label="HS")
+	plt.legend(loc=0)
+	plt.ylabel("D")
+	plt.xlabel("V [kcal/mol]")
+	plt.title("Effective Diff")
+	plt.gcf().savefig("discontinuousPmfRange.png")
+	#plt.title("Homogenized smoluchowski equation with Box PMF")
+
+# <codecell>
+# plot deff vs vol frac and pmf
+def dEffsSizePMF():
+	kT = 0.6 # [kcal/mol]
+	#nBarriers=5
+	#nMargins=8
+	nBarriers=11
+	nMargins=8
+
+	barrierHeights = np.linspace(-5,5,nBarriers)
+	margins = np.linspace(0,0.48,nMargins)
+
+	Ds = np.zeros([nBarriers,nMargins])
+	phis = np.zeros(nMargins)
+	for i,barrierHeight in enumerate(barrierHeights):
+	  for j,margin in enumerate(margins):
+	    VkT = barrierHeight/kT
+	    results=doit(dim=2,margin=margin,barrierHeight=VkT,plot=False)
+	    Ds[i,j]=results.Ds[0]
+	    phis[j] = results.phi
+	    
+
+	    
+
+	# <codecell>
+
+	# for the life of me I could not get pcolormesh to display correctly 
+	plt.figure()
+	#plt.pcolormesh(G,cmap=plt.cm.jet)
+	subplot(121)
+	plt.pcolormesh(Ds.T)#,cmap=plt.cm.jet)
+	plt.colorbar()
+	plt.clim([0,2])
+	subplot(122)
+	#plt.pcolormesh(np.arange(5),np.arange(8),G,cmap=plt.cm.jet)
+	#plt.pcolormesh(margins,barrierHeights,Ds,cmap=plt.cm.jet)
+	js = np.arange(nMargins)
+	js = [0,2,4,5,6]
+	ms=['r-','k-','k--','k-.','k.']
+	for j,i in enumerate(js):
+	  plt.plot(barrierHeights,Ds[:,i],ms[j],linewidth=2,label='$\phi$=%2.1f' % phis[i])
+
+	    
+	    
+	plt.xlabel("V [kcal/mol]")
+	plt.ylabel("D")
+	plt.ylim([0,2])
+	plt.xlim([-10,10])
+
+	plt.legend(bbox_to_anchor=(2.5, -.2),ncol=5)
+	plt.gcf().savefig("dEffsSizePMF.png")
+
 
 if __name__ == "__main__":
   import sys
@@ -415,12 +568,45 @@ Notes:
   for i,arg in enumerate(sys.argv):
     if(arg=="-validation"):
       #arg1=sys.argv[i+1] 
+      validationDiscontVsRepulsive()   
+      
       doit(dim=1,barrierHeight=199,plot=True)
       results=doit(dim=2,discontinuous=False,pmfScale=0,mode="hole",plot=True)
 
+    if(arg=="-pmfAmplitudes"): 
+      pmfAmplitudes()
+   
+    if(arg=="-dEffsSizePMF"): 
+      dEffsSizePMF()
+
+    if(arg=="-Tests"):
+      DiscontTest()
+      SmoothTest()
+      HoleTest()
+
+
+# <codecell>
 
 
 
-  #:doit(fileIn)
+# <markdowncell>
+
+# Misc messing around 
+
+# <codecell>
+
+#mesh = UnitSquare(100,100)
+##V = FunctionSpace(mesh,"CG",1)
+#pmf = Function(V) 
+
+#expr = Expression("exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/0.1)",x0=0.5,x1=0.5)
+#pmf.interpolate(expr)
+#expr = Expression("exp(-sqrt(pow(x[0]-0.5,2) + pow(x[1]-0.5,2)/2.)")
+
+# <codecell>
+
+#pmf(0.0,0.0)
+
+# <codecell>
 
 
