@@ -435,6 +435,35 @@ def test1():
   
 
   
+def prlFig1():
+    import noobstacle as noob
+    noobresults = noob.validationDiscontVsRepulsive()
+    vFracs,outs,sigmas = fig9ops()
+
+    #vFracs,outs,sigmas = test2()
+    ns = np.shape(outs)[0]
+
+    gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1]) 
+    ax = plt.subplot(gs[0])
+    labs = ['b-','b-.','b--','k-','r--','r-.','r-']
+    
+    # Doing negative only
+    #for j in range(ns):
+    nums = range(ns)[0:4]
+    for idx,j in enumerate(nums): 
+      ax.plot(vFracs, outs[j,:],labs[j],label="$\sigma$=%5.3f $[C/m^2]$" % sigmas[j] )
+    
+    hs = vFracs/(2-vFracs)      
+    ax.plot(vFracs, hs,'k.',label="Hashin-Shtrikman")      
+    ax.scatter(noobresults.phis,noobresults.Dss,facecolors="none",label="PMF-only")
+    ax.legend(loc=0,ncol=2,bbox_to_anchor=(0.9, -0.13))        
+    ax.set_xlabel("$\phi$") 
+    ax.set_ylabel("D")
+    ax.set_ylim([0.0,1])
+    ax.set_xlim([0.0,1])
+    ax.grid(True)  
+    #plt.title("My version of fig 9, bourb")
+    plt.gcf().savefig("fig9valid.png")   
 
 
 
@@ -499,5 +528,7 @@ Notes:
       debug=1
     if(arg=="-test1"):
       test1()
+    if(arg=="-prlFig1"):
+      prlFig1()
 
 
