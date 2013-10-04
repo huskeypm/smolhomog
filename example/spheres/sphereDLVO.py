@@ -609,8 +609,8 @@ def final():
     
   #volFracs = 1-np.array([0.1,0.2,0.27,0.34,0.5])
   qs=np.array([-1,0,1])
-  plt.figure()
-  plt.subplot(211)
+  #plt.figure()
+  #plt.subplot(211)
   #col = ["r--","r-","k-","b-","b--"]
   col = ["r-","k-","b-"]  
   for j, q in enumerate(qs):
@@ -635,7 +635,7 @@ def final():
   plt.ylabel("D")
   #plt.legend(bbox_to_anchor = (1.5, 0.7),ncol=1)
   plt.legend(bbox_to_anchor = (1.0,-0.2),ncol=3)
-  plt.gcf().savefig("final.png") 
+  #plt.gcf().savefig("final.png") 
     
 
 # Shows the role of chemica specificity in changing diffusion rates
@@ -656,7 +656,7 @@ def chemSpecificity():
   Dn=results[:,0]
   Dp=results[:,2]
   
-  plt.figure()
+  #plt.figure()
   plt.plot(phis,Dn,"r-",label="z=-1")
   exps=np.array([0,-6,-7])
   KDs = 10.**(exps )
@@ -671,7 +671,7 @@ def chemSpecificity():
   plt.title("Chemical specificity") 
   plt.xlabel("$\phi$") 
   plt.ylabel("D") 
-  plt.gcf().savefig("chemspec.png") 
+  #plt.gcf().savefig("chemspec.png") 
 
 
 
@@ -726,8 +726,11 @@ Notes:
       test()
       quit()
     if(arg=="-final"): 
-      chemSpecificity()
+      plt.figure()
+      plt.subplot(211)
       final()
+      plt.subplot(212)
+      chemSpecificity()
       quit()
 
 

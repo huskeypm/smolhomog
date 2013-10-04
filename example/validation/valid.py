@@ -463,7 +463,8 @@ def prlFig1():
     ax.set_xlim([0.0,1])
     ax.grid(True)  
     #plt.title("My version of fig 9, bourb")
-    plt.gcf().savefig("fig9valid.png")   
+    #plt.gcf().savefig("fig9valid.png")   
+    plt.gcf().savefig("prlFig1.pdf")   
 
 
 

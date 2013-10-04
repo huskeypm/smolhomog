@@ -8,6 +8,7 @@ import sys, math, numpy
 import numpy as np
 from scipy.interpolate import griddata   
 import matplotlib.pylab as plt
+class empty:pass
 
 tol = 1E-14   # tolerance for coordinate comparisons
 EPS=tol
@@ -439,11 +440,10 @@ def validationDiscontVsRepulsive():
 	plt.xlabel("Accessible volume fraction, $\phi$")
 	plt.title("Homogenized smoluchowski equation with Box PMF")
 	plt.gcf().savefig("validationDiscontinuousRepulsive.png")
-
-        results = empty()
+	results = empty()
 	results.Dss = Dss
 	results.Dsanals = Dsanals
-        results.phis = phis
+	results.phis = phis
 	return results
 
 # <codecell>
