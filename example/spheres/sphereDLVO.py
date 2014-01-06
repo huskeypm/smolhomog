@@ -609,8 +609,8 @@ def final():
     
   #volFracs = 1-np.array([0.1,0.2,0.27,0.34,0.5])
   qs=np.array([-1,0,1])
-  #plt.figure()
-  #plt.subplot(211)
+  plt.figure()
+  plt.subplot(211)
   #col = ["r--","r-","k-","b-","b--"]
   col = ["r-","k-","b-"]  
   for j, q in enumerate(qs):
@@ -624,8 +624,11 @@ def final():
     plt.plot(volFracs,resultsDLVO[:,j], col[j],label=label)    
     
   phi = volFracs
-  HS = phi/(2-phi)
-  plt.plot(volFracs,HS, "k.",label="HS (cylinder)")
+#  HS = phi/(2-phi)
+#  plt.plot(volFracs,HS, "k.",label="HS (cylinder)")
+  HS = phi/(3-phi)
+  plt.plot(volFracs,HS, "k.",label="HS (sphere)")
+
 
   title="Protein with DLVO interactions (zProtein=%d)"\
      % parms.zProt
@@ -636,6 +639,7 @@ def final():
   #plt.legend(bbox_to_anchor = (1.5, 0.7),ncol=1)
   plt.legend(bbox_to_anchor = (1.0,-0.2),ncol=3)
   #plt.gcf().savefig("final.png") 
+  plt.gcf().savefig("final.pdf") 
     
 
 # Shows the role of chemica specificity in changing diffusion rates
@@ -656,7 +660,7 @@ def chemSpecificity():
   Dn=results[:,0]
   Dp=results[:,2]
   
-  #plt.figure()
+  plt.figure()
   plt.plot(phis,Dn,"r-",label="z=-1")
   exps=np.array([0,-6,-7])
   KDs = 10.**(exps )
@@ -664,7 +668,8 @@ def chemSpecificity():
   for i,KD in enumerate(KDs):
     # from Cheng, PLOS Comp Bio
     Dp_KD =  Dp / (1 + B/KD)
-    plt.plot(phis,Dp_KD,cols[i],label="z= 1, $K_D$=10$^{%d}$"%exps[i])
+    #plt.plot(phis,Dp_KD,cols[i],label="z= 1, $K_D$=10$^{%d}$"%exps[i])
+    plt.plot(phis,Dp_KD,cols[i],label="z= 1, $K_D$=10$^{%d} [M] $"%(exps[i]))
       
   plt.legend(loc=0)    
   plt.ylim([0,2.5])    
@@ -672,6 +677,7 @@ def chemSpecificity():
   plt.xlabel("$\phi$") 
   plt.ylabel("D") 
   #plt.gcf().savefig("chemspec.png") 
+  plt.gcf().savefig("chemspec.pdf") 
 
 
 
@@ -726,11 +732,8 @@ Notes:
       test()
       quit()
     if(arg=="-final"): 
-      plt.figure()
-      plt.subplot(211)
-      final()
-      plt.subplot(212)
       chemSpecificity()
+      final()
       quit()
 
 
