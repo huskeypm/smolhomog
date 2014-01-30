@@ -148,8 +148,10 @@ def DHExpression(x0=0,x1=0):
     import sys
     sys.path.append("/home/huskeypm/sources/fenics-pb/pete") 
     import poissonboltzmann as pb
-    pb.params.center=np.array([x0,x1,0.]) need to adjust DH to use center (power(x[0]-c0,2) 
+    pb.params.center=np.array([x0,x1,0.]) 
+    print """need to adjust DH to use center (power(x[0]-c0,2) 
     pb.params.molrad = what is radius from original mesh eneration? 
+    """
     exprA = pb.DebyeHuckelExpr()
 
   else:
