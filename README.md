@@ -1,3 +1,5 @@
-In development. 
+For computing effective macroscopic diffusion constants given a microstructure and a potential of mean force.
 
-Please contact pkekeneshuskey uky edu for details.  
+Tutorial in development. 
+
+Please contact pkekeneshuskey uky edu for details.
