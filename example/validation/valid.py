@@ -1,12 +1,13 @@
 
 import sys
-sys.path.append("/net/home/huskeypm/Sources/modified-pb/example")
-sys.path.append("/home/huskeypm/sources/modified-pb/example")
-sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
-sys.path.append("/net/home/huskeypm/Sources/smolhomog/example/noobstacle/")
-sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
-sys.path.append("/net/home/huskeypm/Sources/homogenization/")
-sys.path.append("/net/home/huskeypm/Sources/smolfin/")           
+root = "/home/AD/pmke226/sources/"
+sys.path.append(root+"/modified-pb/example")
+#sys.path.append("/home/huskeypm/sources/modified-pb/example")
+#sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
+sys.path.append(root+"/smolhomog/example/noobstacle/")
+#sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
+sys.path.append(root+"/homogenization/")
+sys.path.append(root+"/smolfin/")           
 import matplotlib.gridspec as gridspec
 import noobstacle as test
 import homoglight as hl

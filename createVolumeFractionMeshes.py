@@ -5,7 +5,6 @@ fractions
 
 import sys
 #sys.path.append("/home/huskeypm/sources/smolfin/")
-from gamer import SurfaceMesh, GemMesh
 from meshmanipulate import *
 
 #
@@ -15,6 +14,7 @@ from meshmanipulate import *
 
 import numpy as np
 def Make3DMesh(volFrac=0.27,rSphere=12.5,dBox=65.,name="test"):
+  from gamer import SurfaceMesh, GemMesh
   sm = SurfaceMesh("./meshes/cube_high.off")
   center(sm)
 
