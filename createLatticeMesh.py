@@ -37,6 +37,6 @@ Notes:
   if(len(sys.argv)==3):
     print "arg"
 
-  bm.makeInc(np.float(inc))
+  bm.makeIncrLattice(np.float(inc))
 
 
