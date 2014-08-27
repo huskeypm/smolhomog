@@ -23,7 +23,7 @@ def makeIncrLattice(inc):
   makeLattice(locs,rads,boxMin=[-8,-8], boxMax=[8,8])
 
 
-def addCircle(n0,nref,inc,ll):
+def addCircle(n0,nref,inc,ll,res=1.):
   n0c = nref
   n1=n0+1
   n1c = n0c+np.array([-1*inc,0]) 
@@ -34,11 +34,11 @@ def addCircle(n0,nref,inc,ll):
   n4=n0+4
   n4c = n0c+np.array([0,1*inc]) 
   
-  line="Point(%d) = {%f,%f,0,1.};\n" % (n0,n0c[0],n0c[1])
-  line+="Point(%d) = {%f,%f,0,1.};\n" % (n1,n1c[0],n1c[1])
-  line+="Point(%d) = {%f,%f,0,1.};\n" % (n2,n2c[0],n2c[1])
-  line+="Point(%d) = {%f,%f,0,1.};\n" % (n3,n3c[0],n3c[1])
-  line+="Point(%d) = {%f,%f,0,1.};\n" % (n4,n4c[0],n4c[1])
+  line="Point(%d) = {%f,%f,0,%f};\n" % (n0,n0c[0],n0c[1],res)
+  line+="Point(%d) = {%f,%f,0,%f};\n" % (n1,n1c[0],n1c[1],res)
+  line+="Point(%d) = {%f,%f,0,%f};\n" % (n2,n2c[0],n2c[1],res)
+  line+="Point(%d) = {%f,%f,0,%f};\n" % (n3,n3c[0],n3c[1],res)
+  line+="Point(%d) = {%f,%f,0,%f};\n" % (n4,n4c[0],n4c[1],res)
   line+="Circle(%d) = {%d,%d,%d};\n" % (n0,n1,n0,n2)            
   line+="Circle(%d) = {%d,%d,%d};\n" % (n1,n2,n0,n3)            
   line+="Circle(%d) = {%d,%d,%d};\n" % (n2,n3,n0,n4)            
@@ -51,12 +51,12 @@ def addCircle(n0,nref,inc,ll):
 
 
 # make lattice given list of location and radii 
-def makeLattice(locs,rads,fileName="out.geo",boxMin=[-8,-8], boxMax=[8,8],writeMesh=True): 
+def makeLattice(locs,rads,fileName="out.geo",boxMin=[-8,-8], boxMax=[8,8],writeMesh=True,res=1.): 
   ## print header 
-  head="Point(1) = {%f, %f, 0, 1.0};\n" % (boxMin[0],boxMax[1])
-  head+="Point(2) = {%f, %f, 0, 1.0};\n" % (boxMin[0],boxMin[1])
-  head+="Point(3) = {%f, %f, 0, 1.0};\n" % (boxMax[0],boxMin[1])
-  head+="Point(4) = {%f, %f, 0, 1.0};\n" % (boxMax[0],boxMax[1])
+  head="Point(1) = {%f, %f, 0, %f};\n" % (boxMin[0],boxMax[1],res)
+  head+="Point(2) = {%f, %f, 0, %f};\n" % (boxMin[0],boxMin[1],res)
+  head+="Point(3) = {%f, %f, 0, %f};\n" % (boxMax[0],boxMin[1],res)
+  head+="Point(4) = {%f, %f, 0, %f};\n" % (boxMax[0],boxMax[1],res)
   head+="""
 Line(1) = {2, 1};
 Line(2) = {1, 4};
@@ -74,7 +74,7 @@ Line Loop(1) = {2, 3, 4, 1};
   for i in np.arange(nCircles):
       nref = locs[i,]
       rad = rads[i]
-      (line,n0,ll) = addCircle(n0,nref,rad,ll)
+      (line,n0,ll) = addCircle(n0,nref,rad,ll,res=res)
       circles+=line
   
   ## add plane tag
@@ -96,6 +96,8 @@ Line Loop(1) = {2, 3, 4, 1};
 
   if writeMesh:
     makeDolfinMeshFromGeo(fileName)
+
+  return fileName.replace("geo","xml")
 
 
 
