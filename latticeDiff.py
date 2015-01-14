@@ -26,19 +26,19 @@ class MyEquation(NonlinearProblem):
         self.L = L
         self.a = a
         self.bcs = bcs
-        self.reset_sparsity = True
+        #self.reset_sparsity = True
     def F(self, b, x):
         assemble(self.L, tensor=b)
         for bc in self.bcs:
           bc.apply(b,x)
     def J(self, A, x):
-        assemble(self.a, tensor=A, reset_sparsity=self.reset_sparsity)
+        assemble(self.a, tensor=A)#, reset_sparsity=self.reset_sparsity)
         for bc in self.bcs:
           bc.apply(A)
-        self.reset_sparsity = False
+        #self.reset_sparsity = False
 
 
-def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=1.):
+def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=0.):
   D = Constant(Diff) 
   # Create mesh and define function space
   mesh = Mesh(fileName)     
@@ -51,10 +51,11 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   # Define functions
   u   = Function(V)  # current solution
   u0  = Function(V)  # solution from previous converged step
-  #init_cond = InitialConditions()
+
+
 
   ## mark boundaries 
-  subdomains = MeshFunction("uint",mesh,1)
+  subdomains = MeshFunction("size_t",mesh,1)
   boundary = LeftBoundary()
   lMarker = 2
   boundary.mark(subdomains,lMarker)
@@ -75,15 +76,22 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
     #u.interpolate(init_cond)
     #u0.interpolate(init_cond)
     u.vector()[:] = z.vector()[:]
-    u.vector()[np.where(u.vector()) < vmin] = vmin
-    u.vector()[np.where(u.vector()) > vmax] = vmax
+    #u.vector()[np.where(u.vector()) < vmin] = vmin
+    #u.vector()[np.where(u.vector()) > vmax] = vmax
     u0.vector()[:] = u.vector()[:]
   
     print "total conc", assemble(u*dx)
 
+  ## dirichlet on left 
   else: 
+    ic = Expression("0")
+    u.interpolate(ic)
+    u0.interpolate(ic)
+
     bc = DirichletBC(V,Constant(1.0),subdomains,lMarker)
     bcs.append(bc)
+   
+    # visualize BC 
     f = Function(V)
     bc.apply(f.vector())
     File("bc.pvd") << f
@@ -98,20 +106,29 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   # then 
   # Int[ e^-*(u'*v - u0'*v - -dt(grad(u')*grad(v))] 
   dt=15.0   
-  T=1000 
+  T=1000
   expnpmf=Function(V)
   expnpmf.vector()[:] = np.exp(-pmf/0.6)
   RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
   L = (expnpmf*u*q*dx - expnpmf*u0*q*dx - dt*RHS)
+  #no PMF RHS = -inner(D*grad(u), grad(q))*dx
+  #no PMF L = u*q*dx - u0*q*dx - dt * RHS
+
   
   # Compute directional derivative about u in the direction of du (Jacobian)
   a = derivative(L, u, du)
   
   
   problem = MyEquation(a,L,bcs)
-  solver = NewtonSolver("gmres")         
+  solver = NewtonSolver()                
+  solver.parameters["linear_solver"] = "gmres"
+  solver.parameters["convergence_criterion"] = "incremental"
+  solver.parameters["relative_tolerance"] = 1e-6
   file = File(outName, "compressed")
   
+  # need to declare outside of loop 
+  up = Function(V)
+  u0p = Function(V)
   
   t = 0.0
   concs=[]
@@ -121,18 +138,16 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
       t0=t
       t += dt
       u0.vector()[:] = u.vector()
-      solver.solve(problem, u.vector())
+      solver.solve(problem,u.vector())
 
       # remap to u from u' = e^+ * u (see above) 
-      up = Function(V)
-      u0p = Function(V)
       u0p.vector()[:] = expnpmf.vector()[:] * u0.vector()[:]
       up.vector()[:] = expnpmf.vector()[:] * u.vector()[:]
       file << (up,t) 
 
       # report on prev iter
-      uds = assemble(u0p*ds(rMarker),mesh=mesh)
-      area = assemble(Constant(1.)*ds(rMarker),mesh=mesh)
+      uds = assemble(u0p*ds(rMarker,domain=mesh))#,mesh=mesh)
+      area = assemble(Constant(1.)*ds(rMarker,domain=mesh))#,mesh=mesh)
       conc = uds/area
       ts.append(t0)
       concs.append(conc)
@@ -246,6 +261,10 @@ def valid1():
   figname = mode+".png"
   plt.gcf().savefig(figname)
 
+def valid():
+  mode = "bc"
+  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15.pvd",mode=mode) 
+
 
 import sys
 
@@ -257,7 +276,7 @@ Purpose:
  
 Usage:
 """
-  msg+="  %s validation/intact" % (scriptName)
+  msg+="  %s -valid/-valid1/-valid2" % (scriptName)
   msg+="""
   
  
@@ -278,6 +297,8 @@ Notes:
       valid1()
     if(arg=="-valid2"):
       valid2()
+    if(arg=="-valid"):
+      valid()
 
 
 
