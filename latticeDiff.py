@@ -4,19 +4,39 @@
 from dolfin import *
 import numpy as np
 import matplotlib.pylab as plt
+from scipy.interpolate import griddata
+class empty:pass 
 
 
 class LeftBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    edge = (np.abs(x[0]- -8) < DOLFIN_EPS) 
+    edge = (np.abs(x[0]- self.mmin[0]) < DOLFIN_EPS) 
     #print x[0], edge, on_boundary
     return on_boundary and edge
 
 class RightBoundary(SubDomain):
   def inside(self,x,on_boundary):
-    edge = (np.abs(x[0]- 8) < DOLFIN_EPS) 
+    edge = (np.abs(x[0]- self.mmax[0]) < DOLFIN_EPS) 
     #print x[0], edge, on_boundary
     return on_boundary and edge
+
+def PrintSlice(mesh,u):  
+#    mesh = results.mesh
+    #dims = np.max(mesh.coordinates(),axis=0) - np.min(mesh.coordinates(),axis=0)
+    mmin = np.min(mesh.coordinates(),axis=0)
+    mmax = np.max(mesh.coordinates(),axis=0)
+    
+    #u = results.u_n.split()[0]
+    #u = results.u_n
+    up = project(u,FunctionSpace(mesh,"CG",1))
+    res = 100
+    #(gx,gy,gz) = np.mgrid[0:dims[0]:(res*1j),
+    #                      dims[1]/2.:dims[1]/2.:1j,
+    #                      0:dims[2]:(res*1j)]
+    (gx,gy) = np.mgrid[mmin[0]:mmax[0]:(res*1j),
+                       mmin[0]:mmax[1]:(res*1j)]
+    img0 = griddata(mesh.coordinates(),up.vector(),(gx,gy))
+    return img0
 
 
 # Nonlinear equation 
@@ -38,8 +58,9 @@ class MyEquation(NonlinearProblem):
         #self.reset_sparsity = False
 
 
-def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource",pmf=0.):
-  D = Constant(Diff) 
+def tsolve(Diff=1.,fileName="m25.xml.gz",\
+           outName="output.pvd",mode="pointsource",pmf=0.,  
+           T=1000):
   # Create mesh and define function space
   mesh = Mesh(fileName)     
   V = FunctionSpace(mesh, "Lagrange", 1)
@@ -57,9 +78,11 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   ## mark boundaries 
   subdomains = MeshFunction("size_t",mesh,1)
   boundary = LeftBoundary()
+  boundary.mmin = np.min(mesh.coordinates(),axis=0)
   lMarker = 2
   boundary.mark(subdomains,lMarker)
   boundary = RightBoundary()
+  boundary.mmax = np.max(mesh.coordinates(),axis=0)
   rMarker = 3
   boundary.mark(subdomains,rMarker)
 
@@ -96,17 +119,20 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
     bc.apply(f.vector())
     File("bc.pvd") << f
 
+  # define integrator 
   ds = Measure("ds")[subdomains]
 
   
   ## weak form 
+  # params 
+  D = Constant(Diff) 
+  t = 0.0
+  dt=15.0   
   # weak form of smol is
   # Int[ u*v - u0*v - -dt(e^-*grad(e^+ u)*grad(v))] 
   # let u' = e^+ * u
   # then 
   # Int[ e^-*(u'*v - u0'*v - -dt(grad(u')*grad(v))] 
-  dt=15.0   
-  T=1000
   expnpmf=Function(V)
   expnpmf.vector()[:] = np.exp(-pmf/0.6)
   RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
@@ -119,6 +145,7 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   a = derivative(L, u, du)
   
   
+  ## define solver,params 
   problem = MyEquation(a,L,bcs)
   solver = NewtonSolver()                
   solver.parameters["linear_solver"] = "gmres"
@@ -126,13 +153,14 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   solver.parameters["relative_tolerance"] = 1e-6
   file = File(outName, "compressed")
   
+  ## Variables for storing answers (after projection) 
   # need to declare outside of loop 
   up = Function(V)
   u0p = Function(V)
   
-  t = 0.0
   concs=[]
   ts = []
+  us = []
   while (t < T):
       # advance 
       t0=t
@@ -145,6 +173,10 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
       up.vector()[:] = expnpmf.vector()[:] * u.vector()[:]
       file << (up,t) 
 
+      
+      # store
+      us.append(PrintSlice(mesh,up))
+
       # report on prev iter
       uds = assemble(u0p*ds(rMarker,domain=mesh))#,mesh=mesh)
       area = assemble(Constant(1.)*ds(rMarker,domain=mesh))#,mesh=mesh)
@@ -156,9 +188,18 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",outName="output.pvd",mode="pointsource"
   ts = np.asarray(ts)
   concs = np.asarray(concs)
 
-  return (ts,concs)
+  results = empty()
+  results.us = us 
+  results.u_n = up
+  results.ts = ts
+  results.concs = concs 
+  results.mesh = mesh 
+
+  
+  return (results)
 
 def DHExpression(x0=0,x1=0):
+  exact=0
   if(exact==1):
     import sys
     sys.path.append("/home/huskeypm/sources/fenics-pb/pete") 
@@ -184,16 +225,19 @@ def valid2():
 
   ## make pmf maps 
   pmf = Function(V) 
-  mask = np.copy(pmf.vector())
+  #if MPI.rank(mpi_comm_world())==0:
+  if 1: # need to find away to perform this via MPI - np might not be appropriate 
+    print "WARNING: not sure if this is being applied on all processors!"
+    mask = np.copy(pmf.vector())
 
-  # this scoots around a Debye-Huckel-like potential over all obstactles
-  for i in np.arange(8):
-    for j in np.arange(8):
-      x0 = -7.+2*i
-      x1 = -7.+2*j
-      exprA = DHExpression(x0,x1)
-      pmf.interpolate(exprA)
-      mask += pmf.vector()[:]
+    # this scoots around a Debye-Huckel-like potential over all obstactles
+    for i in np.arange(8):
+      for j in np.arange(8):
+        x0 = -7.+2*i
+        x1 = -7.+2*j
+        exprA = DHExpression(x0,x1)
+        pmf.interpolate(exprA)
+        mask += pmf.vector()[:]
 
   pmf.vector()[:] = mask
 
@@ -276,7 +320,9 @@ Purpose:
  
 Usage:
 """
-  msg+="  %s -valid/-valid1/-valid2" % (scriptName)
+  msg+="  %s -valid/-valid1/-valid2\n" % (scriptName)
+  msg+="or \n"
+  msg+="  %s -test filename.xml" % (scriptName)
   msg+="""
   
  
@@ -288,10 +334,6 @@ Notes:
   if len(sys.argv) < 2:
       raise RuntimeError(msg)
 
-  fileIn= sys.argv[1]
-  if(len(sys.argv)==3):
-    print "arg"
-
   for i,arg in enumerate(sys.argv):
     if(arg=="-valid1"):
       valid1()
@@ -299,6 +341,13 @@ Notes:
       valid2()
     if(arg=="-valid"):
       valid()
+    if(arg=="-test"):
+      fileName = sys.argv[i+1]
+      tsolve(Diff=1.0,fileName=fileName,outName="out.pvd",mode="bc") 
+  
+
+
+
 
 
 
