@@ -60,7 +60,7 @@ class MyEquation(NonlinearProblem):
 
 def tsolve(Diff=1.,fileName="m25.xml.gz",\
            outName="output.pvd",mode="pointsource",pmf=0.,  
-           T=1000):
+           T=1000, printSlice=False):
   # Create mesh and define function space
   mesh = Mesh(fileName)     
   V = FunctionSpace(mesh, "Lagrange", 1)
@@ -175,7 +175,8 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
 
       
       # store
-      us.append(PrintSlice(mesh,up))
+      if printSlice:
+        us.append(PrintSlice(mesh,up))
 
       # report on prev iter
       uds = assemble(u0p*ds(rMarker,domain=mesh))#,mesh=mesh)
