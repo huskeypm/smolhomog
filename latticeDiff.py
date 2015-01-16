@@ -3,8 +3,6 @@
 # 
 from dolfin import *
 import numpy as np
-import matplotlib.pylab as plt
-from scipy.interpolate import griddata
 class empty:pass 
 
 
@@ -35,6 +33,7 @@ def PrintSlice(mesh,u):
     #                      0:dims[2]:(res*1j)]
     (gx,gy) = np.mgrid[mmin[0]:mmax[0]:(res*1j),
                        mmin[0]:mmax[1]:(res*1j)]
+    from scipy.interpolate import griddata
     img0 = griddata(mesh.coordinates(),up.vector(),(gx,gy))
     return img0
 
@@ -162,6 +161,7 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
   ts = []
   us = []
   while (t < T):
+      print "t=%f" %t
       # advance 
       t0=t
       t += dt
@@ -251,6 +251,7 @@ def valid2():
   pmfr = Function(V)
   pmfr.vector()[:] = -1*pmf.vector()[:] 
   
+  import matplotlib.pylab as plt
   plt.figure()
   (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15n.pvd",mode=mode,pmf=pmfn.vector())
   plt.plot(ts,concs,"k--",label="neutral") 
@@ -275,6 +276,7 @@ def valid2():
   
 
 def valid1():
+  import matplotlib.pylab as plt
   plt.figure()
   #
   mode = "pointsource"
@@ -308,7 +310,7 @@ def valid1():
 
 def valid():
   mode = "bc"
-  (ts,concs) = tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15.pvd",mode=mode) 
+  tsolve(Diff=1.0,fileName="m15.xml.gz",outName="o15.pvd",mode=mode) 
 
 
 import sys
@@ -330,7 +332,8 @@ Usage:
 Notes:
 
 """
-  remap = "none"
+  outName = "out.pvd"
+  Diff=1.
 
   if len(sys.argv) < 2:
       raise RuntimeError(msg)
@@ -338,13 +341,23 @@ Notes:
   for i,arg in enumerate(sys.argv):
     if(arg=="-valid1"):
       valid1()
+      quit()
     if(arg=="-valid2"):
       valid2()
+      quit()
     if(arg=="-valid"):
       valid()
-    if(arg=="-test"):
+      quit()
+    if(arg=="-file"):
       fileName = sys.argv[i+1]
-      tsolve(Diff=1.0,fileName=fileName,outName="out.pvd",mode="bc") 
+    if(arg=="-outName"):
+      outName = sys.argv[i+1]
+    if(arg=="-D"):
+      Diff= np.float(sys.argv[i+1])
+      print "D=%f"%Diff
+
+
+  tsolve(Diff=Diff,fileName=fileName,outName=outName,mode="bc") 
   
 
 
