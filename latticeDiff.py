@@ -1,6 +1,11 @@
 #
 # Time dependent solver, single species 
 # 
+
+# Added functionality to pull out 'x' averages 
+# validated results against time-indep 
+
+
 from dolfin import *
 import numpy as np
 import sys 
@@ -45,10 +50,11 @@ class MyEquation(NonlinearProblem):
 
 def tsolve(Diff=1.,fileName="m25.xml.gz",\
            outName="output.pvd",mode="bc",pmf=0.,  
+           nxIncs=4,
            T=1000, printSlice=False,dt=15., debug=False,eps=DOLFIN_EPS):
   # Create mesh and define function space
   if debug:
-    mesh = UnitCubeMesh(8,8,8) 
+    mesh = UnitCubeMesh(16,16,16)
   else:
     mesh = Mesh(fileName)     
   V = FunctionSpace(mesh, "Lagrange", 1)
@@ -64,18 +70,19 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
 
 
   ## mark boundaries 
-  subdomains = MeshFunction("size_t",mesh,dim-1)
+  subdomains  = MeshFunction("size_t",mesh,dim)
+  subsurfaces = MeshFunction("size_t",mesh,dim-1)
   boundary = LeftBoundary()
   boundary.mmin = np.min(mesh.coordinates(),axis=0)
   boundary.eps = eps
   lMarker = 2
 
-  boundary.mark(subdomains,lMarker)
+  boundary.mark(subsurfaces,lMarker)
   boundary = RightBoundary()
   boundary.mmax = np.max(mesh.coordinates(),axis=0)
   boundary.eps = eps
   rMarker = 3
-  boundary.mark(subdomains,rMarker)
+  boundary.mark(subsurfaces,rMarker)
 
   ## decide on source of probability density  
   bcs=[]
@@ -98,15 +105,14 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
 
   ## dirichlet on left 
   else: 
-    print "MODE"
     ic = Expression("0")
     u.interpolate(ic)
     u0.interpolate(ic)
 
-    bc = DirichletBC(V,Constant(1.0),subdomains,lMarker)
+    bc = DirichletBC(V,Constant(1.0),subsurfaces,lMarker)
     bcs.append(bc)
 
-    bc = DirichletBC(V,Constant(0.0),subdomains,rMarker)
+    bc = DirichletBC(V,Constant(0.0),subsurfaces,rMarker)
     bcs.append(bc)
 
 
@@ -117,7 +123,8 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
     File("bc.pvd") << f
 
   # define integrator 
-  ds = Measure("ds")[subdomains]
+  dx = Measure("dx")[subdomains ]
+  ds = Measure("ds")[subsurfaces]
 
   
   ## weak form [ from (u-u0)/dt = d^2/dx^2 u ]  
@@ -130,26 +137,23 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
   # Int[ e^-*(u'*v - u0'*v - -dt(grad(u')*grad(v))] 
   expnpmf=Function(V)
   expnpmf.vector()[:] = np.exp(-pmf/0.6)
-  print "DISABLED PMF"
-  #RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
-  #L = (expnpmf*u*q*dx - expnpmf*u0*q*dx - dt*RHS)
-  #no PMF 
-  RHS = -inner(D*grad(u), grad(q))*dx(domain=mesh)
-  #no PMF 
-  L = u*q*dx - u0*q*dx - dt * RHS
-  #print "Removed time dep"
-  #L = RHS 
-  #T = dt
+  #print "DISABLED PMF"
+  RHS = -inner(D*expnpmf*grad(u), grad(q))*dx
+  L = (expnpmf*u*q*dx - expnpmf*u0*q*dx - dt*RHS)
+  ##no PMF 
+  #RHS = -inner(D*grad(u), grad(q))*dx(domain=mesh)
+  #L = u*q*dx - u0*q*dx - dt * RHS
 
-  # print Test time indep 
+  ## print Test time indep 
   #form = L
   #form = inner(grad(du), grad(q))*dx(domain=mesh)
   #form += Constant(0.)*q*ds
   #a = lhs(form)
   #L = rhs(form)
-  #x = Function(V)
-  #solve(a == L, x, bcs)
-  #File("test.pvd") << x
+  #u = Function(V)
+  #solve(a == L, u, bcs)
+  #File("test.pvd") << u
+  #xMids, volConcs = integrateYZ(mesh,subdomains ,u,nIncs=4)
   #quit()
 
   
@@ -172,6 +176,7 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
   
   t = 0.0
   concs=[]
+  concsX=[]
   ts = []
   us = []
   while (t < T):
@@ -185,25 +190,49 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
       # remap to u from u' = e^+ * u (see above) 
       u0p.vector()[:] = expnpmf.vector()[:] * u0.vector()[:]
       up.vector()[:] = expnpmf.vector()[:] * u.vector()[:]
-      #file << (up,t) 
-      print "REMOVED time dep"
-      file << (u,t) 
+      file << (up,t) 
+      #print "REMOVED exp/pmf"   
+      #file << (u,t) 
 
       
       # store
       if printSlice:
         us.append(miscutil.Store2DMesh(mesh,up))
 
+      xMids, volConcs = integrateYZ(mesh,subdomains ,u,nIncs=nxIncs)
+      concsX.append(volConcs)
+
       # report on prev iter
       #uds = assemble(u0p*ds(rMarker,domain=mesh))#,mesh=mesh)
       #area = assemble(Constant(1.)*ds(rMarker,domain=mesh))#,mesh=mesh)
       #conc = uds/area
-      #ts.append(t0)
+      ts.append(t0)
       #concs.append(conc)
 
-  # need to move this within loop 
-  # x - the function 
-  def dafunc(mesh,x,nIncs=4):
+
+  # package 
+  ts = np.asarray(ts)
+  concs = np.asarray(concs)
+
+  results = empty()
+  results.xMids = xMids
+  results.xConcs  = np.asarray(concsX)
+  print results.xConcs
+  #print np.shape(concsX)
+  results.us = us 
+  results.u_n = up
+  results.ts = ts
+  results.concs = concs 
+  results.mesh = mesh 
+
+  
+  return (results)
+
+
+### MISC ROUTINES 
+# need to move this within loop 
+# x - the function 
+def integrateYZ(mesh,subdomains ,x,nIncs=4):
     coords = mesh.coordinates()
     bounds = np.max(coords,axis=0) - np.min(coords,axis=0)
     xdim = bounds[0]
@@ -215,29 +244,12 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
 
     volConcs = np.zeros(nIncs)
     for i in np.arange(nIncs):
-      print xMins[i]," ", xMaxs[i]
       xbounds = [xMins[i],xMaxs[i]]
-      volConcs[i] = miscutil.integrated(mesh,subdomains,x,xbounds)
+      volConcs[i] = miscutil.integrated(mesh,subdomains ,x,xbounds)
+      print "<Conc> between x=%f/%f: %f " %(xMins[i],xMaxs[i],volConcs[i])
 
     return xMids,volConcs
 
-  xMids, volConcs = dafunc(mesh,u,nIncs=4)
-
-  # package 
-  ts = np.asarray(ts)
-  concs = np.asarray(concs)
-
-  results = empty()
-  results.xMids = xMids
-  results.volConcs = volConcs
-  results.us = us 
-  results.u_n = up
-  results.ts = ts
-  results.concs = concs 
-  results.mesh = mesh 
-
-  
-  return (results)
 
 def DHExpression(x0=0,x1=0):
   exact=0
@@ -400,9 +412,9 @@ Notes:
       print "D=%f"%Diff
     if(arg=="-debug"):
       Diff = 0.01
-      T = 100 
-      debug=True
-      tsolve(Diff=Diff,debug=True,T=100,eps=0.1) 
+      #tsolve(Diff=Diff,debug=True,T=100,dt=15,eps=0.1) 
+      #tsolve(Diff=Diff,debug=True,T=50,dt=1,eps=0.1) 
+      tsolve(Diff=Diff,debug=True,T=10,dt=.1,eps=0.1) 
       quit()
 
 
