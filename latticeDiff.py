@@ -6,6 +6,8 @@
 # validated results against time-indep 
 
 
+import matplotlib
+matplotlib.use('Agg')
 from dolfin import *
 import numpy as np
 import sys 
@@ -53,8 +55,12 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
            nxIncs=4,
            T=1000, printSlice=False,dt=15., debug=False,eps=DOLFIN_EPS):
   # Create mesh and define function space
+  #debug = True
   if debug:
-    mesh = UnitCubeMesh(16,16,16)
+    l = 16
+    mesh = UnitCubeMesh(l,l,l)    
+    mesh = UnitSquareMesh(l,l)   
+    mesh.coordinates()[:] = mesh.coordinates()*16
   else:
     mesh = Mesh(fileName)     
   V = FunctionSpace(mesh, "Lagrange", 1)
@@ -179,8 +185,10 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
   concsX=[]
   ts = []
   us = []
+  tot0=0.  
   while (t < T):
-      print "t=%f" %t
+      if MPI.rank(mpi_comm_world())==0:
+        print "t=%f" %t
       # advance 
       t0=t
       t += dt
@@ -198,6 +206,12 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
       # store
       if printSlice:
         us.append(miscutil.Store2DMesh(mesh,up))
+
+      # convergence 
+      tot = assemble(u*dx(domain=mesh))
+      if MPI.rank(mpi_comm_world())==0:
+        print "Tot %f delTot = %f" %(tot,np.abs(tot-tot0)/tot)
+      tot0 = tot 
 
       xMids, volConcs = integrateYZ(mesh,subdomains ,u,nIncs=nxIncs)
       concsX.append(volConcs)
@@ -217,14 +231,20 @@ def tsolve(Diff=1.,fileName="m25.xml.gz",\
   results = empty()
   results.xMids = xMids
   results.xConcs  = np.asarray(concsX)
-  print results.xConcs
-  #print np.shape(concsX)
+  #print results.xConcs
   results.us = us 
   results.u_n = up
   results.ts = ts
   results.concs = concs 
   results.mesh = mesh 
 
+  # plt 
+  print "This will look funky/incorrect unless run in single proc mode" 
+  import matplotlib.pylab as plt
+  plt.figure()
+  plt.pcolormesh(results.xConcs)
+  plt.colorbar()
+  plt.gcf().savefig(fileName.replace(".xml.gz",".png"))
   
   return (results)
 
@@ -246,7 +266,7 @@ def integrateYZ(mesh,subdomains ,x,nIncs=4):
     for i in np.arange(nIncs):
       xbounds = [xMins[i],xMaxs[i]]
       volConcs[i] = miscutil.integrated(mesh,subdomains ,x,xbounds)
-      print "<Conc> between x=%f/%f: %f " %(xMins[i],xMaxs[i],volConcs[i])
+      #print "<Conc> between x=%f/%f: %f " %(xMins[i],xMaxs[i],volConcs[i])
 
     return xMids,volConcs
 
@@ -410,11 +430,22 @@ Notes:
     if(arg=="-D"):
       Diff= np.float(sys.argv[i+1])
       print "D=%f"%Diff
+    if(arg=="-T"):
+      T= np.float(sys.argv[i+1])
+      print "T=%f"%T    
+    if(arg=="-test2"):
+      fileName = "m00.xml.gz"      
+      outs=tsolve(Diff=1.0,fileName=fileName,T=100,dt=5.,eps=0.2,nxIncs=15) 
+      quit()
+    if(arg=="-test3"):
+      fileName = "m50.xml.gz"      
+      outs=tsolve(Diff=1.0,fileName=fileName,T=200,dt=5.,eps=0.2,nxIncs=15)
+      quit()
     if(arg=="-debug"):
       Diff = 0.01
       #tsolve(Diff=Diff,debug=True,T=100,dt=15,eps=0.1) 
       #tsolve(Diff=Diff,debug=True,T=50,dt=1,eps=0.1) 
-      tsolve(Diff=Diff,debug=True,T=10,dt=.1,eps=0.1) 
+      outs = tsolve(Diff=Diff,debug=True,T=10,dt=.1,eps=0.1) 
       quit()
 
 

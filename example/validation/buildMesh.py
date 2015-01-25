@@ -64,7 +64,7 @@ Line(3) = {4, 3};
 Line(4) = {3, 2};
 Line Loop(1) = {2, 3, 4, 1};
   """ 
-  n0 = 5
+  n0 = 5 # numbering for each added point 
   
   
   ## Add all circles 
