@@ -9,6 +9,7 @@ print "WARNING: DLVO stuff is for LIKE charged surface, not opposite"
 import sys
 prefix = "/net/home/huskeypm/Sources/"
 prefix = "/home/huskeypm/sources/"
+prefix = "/home/huskeypm/sources/"
 sys.path.append(prefix+"/smolhomog/example/")
 sys.path.append(prefix+"/modified-pb/example/")
 sys.path.append("/net/home/huskeypm/Sources/homogenization/example/volfracs/")
@@ -626,7 +627,7 @@ def final():
   phi = volFracs
 #  HS = phi/(2-phi)
 #  plt.plot(volFracs,HS, "k.",label="HS (cylinder)")
-  HS = phi/(3-phi)
+  HS = 2*phi/(3-phi)
   plt.plot(volFracs,HS, "k.",label="HS (sphere)")
 
 
