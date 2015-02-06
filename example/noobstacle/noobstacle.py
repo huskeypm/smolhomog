@@ -3,6 +3,9 @@
 
 # <codecell>
 
+# i tink I need to remove all mention of k from everywhere, 
+# then it might work 
+
 from dolfin import *
 import sys, math, numpy
 import numpy as np
@@ -37,7 +40,7 @@ parms = params()
     
 def DefineBoundary(x,btype,on_boundary):
   if(not on_boundary):
-    return 0
+    return False
 
   # need this, since for some reason 'dim' is not global
   dim = np.shape(x)[0]
@@ -107,9 +110,9 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     nx = 100; 
     #dim = 1
     if(dim==1):
-        mesh = UnitInterval(nx)
+        mesh = UnitIntervalMesh(nx)
     elif(mode=="hole"):
-        discontinuous=False
+        #PKH150204 discontinuous=False
         mesh = Mesh("cylinder.xml") 
     elif(mode=="holeBig"):
         discontinuous=False
@@ -121,17 +124,19 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
         mesh = Mesh(fileIn)
         discontinuous = False 
     else:
-        mesh = UnitSquare(nx,nx)
+        mesh = UnitSquareMesh(nx,nx)
     #dim = mesh.ufl_cell().geometric_dimension()
 
     ## Define a MeshFunction over two subdomains
-    subdomains = MeshFunction('uint', mesh, dim)
+    subdomains = MeshFunction('size_t', mesh, dim)
 
     # Mark subdomains with numbers 0 and 1
     markerFree=0;
     markerObstacle=1;
-    for cell_no in range(len(subdomains.array())):
-        subdomains.array()[cell_no]=markerFree
+    #for cell_no in range(len(subdomains.array())):
+    #    subdomains.array()[cell_no]=markerFree
+    print "WARNING: not tested" 
+    subdomains.set_all(markerFree)
 
     if(discontinuous): 
         #subdomain0 = Omega0() 
@@ -153,18 +158,30 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
         k_values = expnv
         
         # populate 
+        ## Not MPI safe 
         import numpy
-        help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
+        help = np.asarray(subdomains.array(), dtype=numpy.int32)
         k.vector()[:] = numpy.choose(help, k_values)
-        print "exp(-V): ", k.vector().array()
+        #print "exp(-V): ", k.vector().array()
+        kFree = k
+        kObs  = k
+    
+        # PKH 150205
+        print "STill not quite correct" 
+        #kFree = Constant(1.)  # works, 
+	kFree= Constant(k_values[0]) # does not work 
+        kObs = Constant(k_values[1])  
+        
     else:
 
         if(potential=="none"): 
           print "Using a continuously-varying PMF" 
+          print "WRNING: this might not be correct w MPI, so double check " 
           # exp(-V), where V = exp(-x^2/v)
           expr = Expression("exp(-A*exp(-(pow(x[0]-x0,2) + pow(x[1]-x1,2))/W))",\
                             x0=0.5,x1=0.5,A=pmfScale,W=pmfWidth)
-          k=expr
+          kObs=expr; print "Do I reall want expr here?"
+          kFree=expr
           pmf = Function(FunctionSpace(mesh,"CG",1))
           pmf.interpolate(k)
           File("test.pvd") << pmf
@@ -175,6 +192,7 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
           plt.colorbar()
           plt.title("pmf") 
         else:
+          print "WRNING: this likely will not run w MPI"
           print "Using imported grid" 
           pmfFactor = Function(FunctionSpace(mesh,"CG",1))
           print np.shape(pmfFactor.vector()[:] )
@@ -189,7 +207,7 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     
     
     #plot(subdomains, title='subdomains')
-    dx = Measure("dx")[subdomains] 
+    dx = Measure("dx",domain=mesh)[subdomains] 
     
 
     ## Assign BC 
@@ -216,11 +234,12 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     u = TrialFunction(V)
     v = TestFunction(V)
     # leaving out Dij=const, since solving steady state 
-    formi = k*inner((grad(u)+Delta), grad(v)) 
+    #form = k*inner((grad(u)+Delta), grad(v))
     #print "CODE IS WRONG - DO NOT USE"
     #formi = inner((grad(u)+Delta), grad(v)) 
-    
-    form = formi*dx(markerFree) + formi*dx(markerObstacle)
+    #form = formi*dx(markerFree) + formi*dx(markerObstacle)
+    form = kFree*inner((grad(u)+Delta),grad(v))*dx(markerFree) 
+    form += kObs*inner((grad(u)+Delta),grad(v))*dx(markerObstacle)
     a = lhs(form)
     L = rhs(form)
     
@@ -296,7 +315,8 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
           plt.subplot(427)
           plt.pcolormesh(interpgx.T)
           plt.title("k*du0+1)")    
-          print "Assemble x %f" % (assemble(up*dx(0) + up*dx(1),mesh=mesh))
+          # NOt sure what this does
+          # print "Assemble x %f" % (assemble(up*dx(0) + up*dx(1)))#,mesh=mesh))
         
         
       
@@ -370,7 +390,8 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     ## Compare diff const. with analytical bounds (2D) 
     diff=boundsMax-boundsMin
     unitCellVol =   np.prod(diff[0:dim])
-    freeVol = assemble(Constant(1.)*dx(markerFree),mesh=mesh)
+
+    freeVol = assemble(Constant(1.)*dx(markerFree))#,mesh=mesh)
     phi = freeVol/unitCellVol
     Dsanal = phi/(2-phi)
     Ds = omegas/unitCellVol
@@ -409,7 +430,8 @@ def SmoothTest():
 def HoleTest():
 	# <codecell>
 
-	results=doit(dim=2,discontinuous=False,pmfScale=-1,mode="hole",plot=True,outName="holeAttractive.png")
+	results=doit(dim=2,discontinuous=True,pmfScale=-1,mode="hole",plot=True,outName="holeAttractive.png")
+	#results=doit(dim=2,discontinuous=False,pmfScale=-1,mode="hole",plot=True,outName="holeAttractive.png")
 	#results=doit(dim=2,discontinuous=False,pmfScale=0,mode="hole",plot=True,outName="holeNeutral.png")
 	#results=doit(dim=2,discontinuous=False,pmfScale=1,mode="hole",plot=True,outName="holeRepulsive.png")
 
@@ -570,7 +592,8 @@ Notes:
       #arg1=sys.argv[i+1] 
       validationDiscontVsRepulsive()   
       
-      doit(dim=1,barrierHeight=199,plot=True)
+      # PKH - broken, not sure why I would want this anyway 
+      # doit(dim=1,barrierHeight=199,plot=True)
       results=doit(dim=2,discontinuous=False,pmfScale=0,mode="hole",plot=True)
 
     if(arg=="-pmfAmplitudes"): 
@@ -582,6 +605,8 @@ Notes:
     if(arg=="-Tests"):
       DiscontTest()
       SmoothTest()
+      HoleTest()
+    if(arg=="-Hole"):
       HoleTest()
 
 
