@@ -17,6 +17,8 @@ tol = 1E-14   # tolerance for coordinate comparisons
 EPS=tol
 boundsMin = np.zeros(3)
 boundsMax = np.zeros(3)
+markerFree=0;
+markerObs=1;
 
 # <codecell>
 
@@ -131,8 +133,6 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     subdomains = MeshFunction('size_t', mesh, dim)
 
     # Mark subdomains with numbers 0 and 1
-    markerFree=0;
-    markerObstacle=1;
     #for cell_no in range(len(subdomains.array())):
     #    subdomains.array()[cell_no]=markerFree
     print "WARNING: not tested" 
@@ -142,14 +142,14 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
         #subdomain0 = Omega0() 
         #subdomain0.mark(subdomains, 0)
         subdomain1 = Omega1() # obstacle
-        subdomain1.mark(subdomains, markerObstacle)
+        subdomain1.mark(subdomains, markerObs)
         
         
         ## Define diffusion constant (D = exp(-V)) within two domains 
         # Discontinuous basis is used for boundary condition
         # LAter, continuous basis used for PDE solution 
         V0 = FunctionSpace(mesh, 'DG', 0)
-        k = Function(V0)
+        ##k = Function(V0)
         
         ## Define diffusion constant to assume large values at 'edges' (Omega0 and Omega2), and 
         ## small value at middle (Omega1). We assume D(y) = exp(-V(y)), so large D corresponds to a obstacle
@@ -160,11 +160,11 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
         # populate 
         ## Not MPI safe 
         import numpy
-        help = np.asarray(subdomains.array(), dtype=numpy.int32)
-        k.vector()[:] = numpy.choose(help, k_values)
+        ##help = np.asarray(subdomains.array(), dtype=numpy.int32)
+        ##k.vector()[:] = numpy.choose(help, k_values)
         #print "exp(-V): ", k.vector().array()
-        kFree = k
-        kObs  = k
+        ##kFree = k
+        ##kObs  = k
     
         # PKH 150205
         print "STill not quite correct" 
@@ -183,7 +183,8 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
           kObs=expr; print "Do I reall want expr here?"
           kFree=expr
           pmf = Function(FunctionSpace(mesh,"CG",1))
-          pmf.interpolate(k)
+          pmf.interpolate(expr)
+
           File("test.pvd") << pmf
           gx,gy = np.mgrid[0:1:100j,0:1:100j]
           interp0 = griddata(mesh.coordinates(),pmf.vector(),(gx,gy))
@@ -237,9 +238,9 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     #form = k*inner((grad(u)+Delta), grad(v))
     #print "CODE IS WRONG - DO NOT USE"
     #formi = inner((grad(u)+Delta), grad(v)) 
-    #form = formi*dx(markerFree) + formi*dx(markerObstacle)
+    #form = formi*dx(markerFree) + formi*dx(markerObs)
     form = kFree*inner((grad(u)+Delta),grad(v))*dx(markerFree) 
-    form += kObs*inner((grad(u)+Delta),grad(v))*dx(markerObstacle)
+    form += kObs*inner((grad(u)+Delta),grad(v))*dx(markerObs)
     a = lhs(form)
     L = rhs(form)
     
@@ -259,6 +260,8 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     
     ## Show chi solution  
     if(plot): 
+      print "DISABLED FOR NOW"
+    if False:
       if(dim==1):
           gx = np.mgrid[0:1:100j]
           interp0 = griddata(mesh.coordinates(),u.vector(),(gx))
@@ -320,7 +323,8 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
         
         
       
-    if(plot):     
+    #if(plot):     
+    if False:
         plt.figure()
         plt.subplot(121)  
         if(dim==2):
@@ -339,7 +343,8 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     
     omegas = np.zeros(dim)    
     forms = []
-    if(dim==1):    
+    #if(dim==1):    
+    if False:      
         grad_Xi_component = k*(grad(u)+Constant(1.0))  
         forms.append(grad_Xi_component)
         
@@ -357,10 +362,14 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
       for i in range(dim):
             v = [0,0,0]
             v[i] = 1
-            grad_Xi_component = k*(inner(grad(u[i]),Constant((v[0],v[1]))) + Constant(1))
+            grad_Xi_component = kFree*(inner(grad(u[i]),Constant((v[0],v[1]))) + Constant(1))*dx(markerFree)
+            grad_Xi_component+= kObs*(inner(grad(u[i]),Constant((v[0],v[1]))) + Constant(1))*dx(markerObs)  
             _component = (inner(grad(u[i]),Constant((v[0],v[1]))))
             _component = grad(u[i])
             if(plot): 
+             Vs = FunctionSpace(mesh,"CG",1)
+             up = project(u[0],V=Vs)    
+             up = project(kFree*(_component[0]+1.),V=Vs) 
              g=project(_component[1],FunctionSpace(mesh,"CG",1))
              interp2 = griddata(mesh.coordinates(),g.vector(),(gx,gy))
              print "inerpmin %f" % (np.min(interp2[:,50]))
@@ -371,6 +380,7 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
               File("comp.pvd") << g
               plt.figure()
               gx,gy = np.mgrid[0:1:100j,0.5:0.5:1j]
+              print "NOT SURE IF CORRECT"
               interp1 = griddata(mesh.coordinates(),up.vector(),(gx,gy))               
               plt.plot(gx[:,0],interp1,label="sol")
               interp2 = griddata(mesh.coordinates(),g.vector(),(gx,gy)) 
@@ -382,7 +392,8 @@ def doit(dim=1,margin=.1,barrierHeight=50,discontinuous=True,\
     # Evaluate form 
     for i,grad_Xi_component in enumerate(forms):     
         print "WARNING: double check that pmf should be applied to delta"
-        form = grad_Xi_component * dx(markerFree) + grad_Xi_component*dx(markerObstacle)  
+        #form = grad_Xi_component * dx(markerFree) + grad_Xi_component*dx(markerObs)  
+        form = grad_Xi_component 
         integrand = assemble(form)
         print "integrand %d %f" %(i,integrand)
         omegas[i] = integrand
@@ -594,7 +605,8 @@ Notes:
       
       # PKH - broken, not sure why I would want this anyway 
       # doit(dim=1,barrierHeight=199,plot=True)
-      results=doit(dim=2,discontinuous=False,pmfScale=0,mode="hole",plot=True)
+      # also broken 
+      #results=doit(dim=2,discontinuous=False,pmfScale=0,mode="hole",plot=True)
 
     if(arg=="-pmfAmplitudes"): 
       pmfAmplitudes()
