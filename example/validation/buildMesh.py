@@ -141,7 +141,8 @@ def makeCylMesh(boxRad,sphereRad,res):
 
   print res
   makeGmshFile(boxRad,sphereRad,res,caseName=caseName)
-  makeDolfinMeshFromGeo(caseName)
+  xmlName = makeDolfinMeshFromGeo(caseName)
+  return xmlName # need for smolhomog
 
 def makeDolfinMeshFromGeo(caseName):
   msh = caseName.replace(".geo",".msh") 

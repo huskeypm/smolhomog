@@ -1,15 +1,13 @@
 
+##
+## Revisions
+## 150416 PKH Upgraded to align with dolfin 1.4 as well as generalize python paths
+## 
 import sys
 root = "/home/AD/pmke226/sources/"
-sys.path.append(root+"/modified-pb/example")
-#sys.path.append("/home/huskeypm/sources/modified-pb/example")
-#sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
-sys.path.append(root+"/smolhomog/example/noobstacle/")
-#sys.path.append("/home/huskeypm/sources/smolhomog/example/noobstacle/")
-sys.path.append(root+"/homogenization/")
-sys.path.append(root+"/smolfin/")           
+# PKH only do through config file 
+# sys.path.append(root+"/modified-pb/example")
 import matplotlib.gridspec as gridspec
-import noobstacle as test
 import homoglight as hl
 
 import poissonboltzmann as pb
@@ -17,7 +15,6 @@ import poissonboltzmann as pb
 #
 # Still in development 
 #
-debug = 0
 from dolfin import *
 import matplotlib.pyplot as plt
 import sys
@@ -62,7 +59,7 @@ def interp2d(mesh,x,mode="line"):
         interp[np.isnan(interp)]=0
         return gx,gy,interp
 
-def fig7Murad():
+def fig7Murad(debug=False):
   print "WARNING: should do for bilayer, not cylinder [graham eqn, etc]"
   parms.res=0.75 # slow
   parms.res=0.50 # slow
@@ -100,12 +97,12 @@ def fig7Murad():
         parms.ionC = cb
         
         parms.sigma = -1.*abssigma
-        results = runCase()
+        results = runCase(debug=debug)
         Dms[i,j] = results.Ds[0]
         print results.Ds[0]    
 
         parms.sigma = abssigma
-        results = runCase()
+        results = runCase(debug=debug)
         Dps[i,j] = results.Ds[0]
         print results.Ds[0]    
         
@@ -222,11 +219,13 @@ def fig7():
   #might also compare w Fig 7 of Murad, but should probably suffice to show opposite
   #tends noted for D- vs D+ [actually, they aren't opposites, so look closer]  
 
-def runCase(engine="testing"):     
+#def runCase(engine="testing",debug=False):     
+def runCase(engine="homog.py",debug=False):     
     if(debug):
       fileIn = "cylinderTmp.xml"
     else:
-      fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res)          
+      #fileIn = buildMesh.makeGmshMesh(parms.domRad,parms.molRad,parms.res)          
+      fileIn = buildMesh.makeCylMesh(parms.domRad,parms.molRad,parms.res)          
     mesh = Mesh(fileIn)
     
     # get electro potential (OVERRIDING) 
@@ -255,6 +254,7 @@ def runCase(engine="testing"):
     
     parms.update()
     if(engine=="testing"):
+      import noobstacle as test
       results = test.doit(mode="hack2",discontinuous=False,dim=2,fileIn=fileIn,potential=unitlessPotential)
     elif(engine=="homog.py"):
       scaledPotential = Function(V)  
@@ -267,7 +267,7 @@ def runCase(engine="testing"):
     return results 
 
 # for validating against fig 9 of bourbatache 
-def fig9ops():
+def fig9ops(debug=False):
   # all cases 
   if(debug):
     parms.res = 10 # quick 
@@ -300,15 +300,15 @@ def fig9ops():
           if(1):  
             # make Mesh 
             parms.molRad=molRad  # A 
-            results = runCase()
-            vFracs[i] = results.phi
+            results = runCase(debug=debug)
+            vFracs[i] = results.volFrac
             outs[j,i] = results.Ds[0]
-            print results.Ds[0]
+            print vFracs[i],results.Ds[0]
             
   return vFracs,outs,sigmas
         
-def fig9():
-    vFracs,outs,sigmas = fig9ops()
+def fig9(debug=False):
+    vFracs,outs,sigmas = fig9ops(debug=debug)
     #vFracs,outs,sigmas = test2()
     ns = np.shape(outs)[0]
 
@@ -332,7 +332,7 @@ def fig9():
     #plt.title("My version of fig 9, bourb")
     plt.gcf().savefig("fig9valid.png")     
 
-def fig8():
+def fig8(debug=False):
   parms.res=1
   parms.domRad=0.5e-8 * m_to_A # A 
   cb = 86 * 1e-3 # mol/m^3 --> M  
@@ -345,7 +345,7 @@ def fig8():
   Ds = np.zeros(nSigma)  
   for i, sigma in enumerate(sigmas):
     parms.sigma = sigma    
-    results = runCase() 
+    results = runCase(debug=debug) 
     Ds[i] = results.Ds[0]
 
   print Ds
@@ -384,7 +384,7 @@ def validation(runSeveral=True):
     parms.sigma = sigma # C/m^2
 
     ## using 'runCase'
-    results = runCase() 
+    results = runCase(debug=debug) 
     Drun1 = results.Ds[0]
     print "runCase:sigma %f z %f D %f " %(sigma,parms.zLig,Drun1)
 
@@ -395,7 +395,7 @@ def validation(runSeveral=True):
     # smol.ElectrostaticsPMF expects to multiply psi*q/kT  
     # so we first multiply potential [mV] by F/RT [1/mV] s.t. potential is unitless 
     # then multiply by -kT and assume that 'q=1' (since already included in Fz/RT term)
-    results2 = runCase(engine="homog.py")
+    results2 = runCase(engine="homog.py",debug=debug)
     Drun2 = results2.Ds[0]
     print "homog: sigma %f z %f D %f " %(sigma,parms.zLig,Drun2)
 
@@ -420,7 +420,7 @@ def test1():
   Ds = np.zeros(nSigma)
   for i, sigma in enumerate(sigmas):
     parms.sigma = sigma
-    results = runCase(engine="homog.py")
+    results = runCase(engine="homog.py",debug=debug)
     Ds[i] = results.Ds[0]
 
   plt.figure()
@@ -505,6 +505,7 @@ Notes:
   if(len(sys.argv)==3):
     print "arg"
 
+  debug = False
   for i,arg in enumerate(sys.argv):
     if(arg=="-validation"): 
       validation()
@@ -525,9 +526,9 @@ Notes:
     if(arg=="-fig8"):
       fig8()
     if(arg=="-fig9"):
-      fig9()
+      fig9(debug=debug)
     if(arg=="-debug"): 
-      debug=1
+      debug=True
     if(arg=="-test1"):
       test1()
     if(arg=="-prlFig1"):
